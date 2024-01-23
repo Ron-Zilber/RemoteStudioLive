@@ -1,3 +1,4 @@
+// Client src code
 package main
 
 import (
@@ -7,14 +8,14 @@ import (
 )
 
 const (
-	SERVER_IP   = "" // Replace with the actual IP address of your server
-	SERVER_PORT = "3333"
-	CONN_TYPE   = "tcp"
+	ServerIP   = ""     // ServerIP - Replace with the actual IP address of your server
+	ServerPort = "3333" // ServerPort - The port number of the server
+	ConnType   = "tcp"  // ConnType - The type of the connection
 )
 
 func main() {
 	// Connect to the server
-	conn, err := net.Dial(CONN_TYPE, SERVER_IP+":"+SERVER_PORT)
+	conn, err := net.Dial(ServerIP, ServerPort+":"+ConnType)
 	if err != nil {
 		fmt.Println("Error connecting:", err.Error())
 		os.Exit(1)
