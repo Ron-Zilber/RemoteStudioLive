@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	SERVER_IP   = "192.168.1.2" // Replace with the actual IP address of your server
+	SERVER_IP   = "" // Replace with the actual IP address of your server
 	SERVER_PORT = "3333"
 	CONN_TYPE   = "tcp"
 )
