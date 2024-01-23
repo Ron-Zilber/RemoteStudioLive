@@ -1,4 +1,4 @@
-// Package server is a nice package
+// Server src code
 package main
 
 import (
@@ -10,14 +10,18 @@ import (
 )
 
 const (
-	CONN_HOST = "" // Empty string means listen on all available interfaces
-	CONN_PORT = "3333"
-	CONN_TYPE = "tcp"
+	ConnHost = ""     // ConnHost - Empty string means listen on all available interfaces
+	ConnPort = "8080" // ConnPort - The port of the connection
+	ConnType = "tcp"  // ConnType - The type of the connection
 )
 
 func main() {
 	// Listen for incoming connection.
-	l, err := net.Listen(CONN_TYPE, ":"+CONN_PORT)
+	connPort := ConnPort
+	if len(os.Args) > 1 {
+		connPort = os.Args[1]
+	}
+	l, err := net.Listen(ConnType, ":"+connPort)
 	if err != nil {
 		fmt.Println("Error listening: ", err.Error())
 		os.Exit(1)
@@ -31,7 +35,7 @@ func main() {
 	// Close the listener when the application closes.
 	defer l.Close() // defer pushes the call to Close() to the stack s.t it will be executed before the server() function returning
 	host, _ := net.LookupHost(name)
-	fmt.Println("Listening on "  + host[0] + ":",CONN_PORT)
+	fmt.Println("Listening on "+host[0]+":", connPort)
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
@@ -61,11 +65,11 @@ func handleRequest(conn net.Conn) {
 	// Builds the message
 	message := "Hi, I received your message!\nIt was "
 	message += strconv.Itoa(reqLen)
-	message += " bytes long and that's what it said:\n "
+	message += " bytes long and that's what it said:\n"
 	n := bytes.Index(buff, []byte{0})
 	message += string(buff[:n-1])
 	message += "\n"
-	
+
 	// Write the message in the connection channel
 	conn.Write([]byte(message))
 	// Close the connection when you're done with it
