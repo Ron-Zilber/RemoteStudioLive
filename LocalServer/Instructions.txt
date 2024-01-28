@@ -1,0 +1,15 @@
+                Echo server instructions:
+ 
+ Use those instructions to run the echo server on a server machine
+ and echo messages that are sent from a client machine
+
+
+ 1. On the server machine use the Bash command "ifconfig" to find the IP address of the machine.
+ 2. copy that address to the ServerIP constant variable on the client.go code on the client machine
+ 3. On the server machine run main.go
+ 4. On the client machine run client.go
+
+(*) The way that works is when the server is the lab machine and the client is the laptop
+
+At this point, a message from the client should arrive at the server, and echoed back the the client.
+(The other way is not working)
