@@ -8,14 +8,14 @@ import (
 )
 
 const (
-	ServerIP   = ""     // ServerIP - Replace with the actual IP address of your server
-	ServerPort = "3333" // ServerPort - The port number of the server
-	ConnType   = "tcp"  // ConnType - The type of the connection
+	ServerIP   = "132.72.109.142" // ServerIP - Replace with the actual IP address of your server
+	ServerPort = "8080"           // ServerPort - The port number of the server
+	ConnType   = "tcp"            // ConnType - The type of the connection
 )
 
 func main() {
 	// Connect to the server
-	conn, err := net.Dial(ServerIP, ServerPort+":"+ConnType)
+	conn, err := net.Dial(ConnType, ServerIP+":"+ServerPort)
 	if err != nil {
 		fmt.Println("Error connecting:", err.Error())
 		os.Exit(1)
