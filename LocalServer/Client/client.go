@@ -8,14 +8,19 @@ import (
 )
 
 const (
-	ServerIP   = "132.72.109.142" // ServerIP - Replace with the actual IP address of your server
+	ServerIP   = "172.23.175.237" // ServerIP - Replace with the actual IP address of your server
 	ServerPort = "8080"           // ServerPort - The port number of the server
 	ConnType   = "tcp"            // ConnType - The type of the connection
 )
 
 func main() {
+	// Enable port configuring from shell
+	serverPort := ServerPort
+	if len(os.Args) > 1 {
+		serverPort = os.Args[1]
+	}
 	// Connect to the server
-	conn, err := net.Dial(ConnType, ServerIP+":"+ServerPort)
+	conn, err := net.Dial(ConnType, ServerIP+":"+serverPort)
 	if err != nil {
 		fmt.Println("Error connecting:", err.Error())
 		os.Exit(1)
@@ -23,7 +28,7 @@ func main() {
 	defer conn.Close()
 
 	// Send a message to the server
-	message := "Hello from the client!"
+	message := "Hello from the client! "
 	_, err = conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error sending message:", err.Error())

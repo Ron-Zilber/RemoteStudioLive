@@ -16,11 +16,12 @@ const (
 )
 
 func main() {
-	// Listen for incoming connection.
+	// Enable port configuring from shell
 	connPort := ConnPort
 	if len(os.Args) > 1 {
 		connPort = os.Args[1]
 	}
+	// Listen for incoming connection.
 	l, err := net.Listen(ConnType, ":"+connPort)
 	if err != nil {
 		fmt.Println("Error listening: ", err.Error())
