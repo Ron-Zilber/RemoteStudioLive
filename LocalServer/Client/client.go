@@ -20,8 +20,8 @@ func main() {
 	serverPort, serverIP := ServerPort, ServerIP
 
 	if len(os.Args) > 2 {
-		serverPort = os.Args[1]
-		serverIP = os.Args[2]
+		serverIP = os.Args[1]
+		serverPort = os.Args[2]
 	}
 	// Connect to the server
 	conn, err := net.Dial(ConnType, serverIP+":"+serverPort)
