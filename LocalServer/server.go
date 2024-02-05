@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	ConnHost = ""    // ConnHost - Empty string means listen on all available interfaces
-	ConnPort = "8080"  // ConnPort - The port of the connection
-	ConnType = "tcp" // ConnType - The type of the connection
+	ConnHost = ""     // ConnHost - Empty string means listen on all available interfaces
+	ConnPort = "8080" // ConnPort - The port of the connection
+	ConnType = "tcp"  // ConnType - The type of the connection
 )
 
 func main() {
@@ -44,14 +44,14 @@ func handleRequest(conn net.Conn) {
 	// Handle incoming messages
 	defer conn.Close()
 	for {
+		reader := bufio.NewReader(conn)
 		message, err :=
-			bufio.NewReader(conn).ReadString('\n')
+			reader.ReadString('\n')
 		if message == "exit\n" || err == io.EOF {
 			fmt.Println(conn.RemoteAddr(), "Disconnected")
 			break
 		}
 		CheckError(err)
-
 		fmt.Print("Message Received from " + conn.RemoteAddr().String() + " " + string(message))
 		newMessage := strings.ToUpper(message)
 		conn.Write([]byte(newMessage))

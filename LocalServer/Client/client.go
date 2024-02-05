@@ -4,33 +4,33 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"log"
 )
 
 const (
 	ServerIP   = "172.23.175.237" // ServerIP   - Replace with the actual IP address of your server
-	ServerPort = "8080"             // ServerPort - The port number of the server
+	ServerPort = "8080"           // ServerPort - The port number of the server
 	ConnType   = "tcp"            // ConnType   - The type of the connection
 )
 
 func main() {
-	// Enable port configuring from shell
-	serverPort := ServerPort
+	// Enable server IP and port configuring from shell
+	serverPort, serverIP := ServerPort, ServerIP
 
-	if len(os.Args) > 1 {
+	if len(os.Args) > 2 {
 		serverPort = os.Args[1]
+		serverIP = os.Args[2]
 	}
 	// Connect to the server
-	conn, err := net.Dial(ConnType, ServerIP+":"+serverPort)
+	conn, err := net.Dial(ConnType, serverIP+":"+serverPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
 	for {
-		//sendDefaultMessage(conn, i)
 		if !sendMessage(conn) {
 			break
 		}
@@ -48,6 +48,9 @@ func sendMessage(conn net.Conn) (status bool) {
 		fmt.Fprintf(conn, text+"\n")
 		return false
 
+	} else if text == "lorem\n" {
+		sendFile(conn, "lorem ipsum.txt")
+		return true
 	}
 	// Send the text to the server:
 	fmt.Fprintf(conn, text+"\n")
@@ -57,4 +60,35 @@ func sendMessage(conn net.Conn) (status bool) {
 func handleRequest(conn net.Conn) {
 	message, _ := bufio.NewReader(conn).ReadString('\n')
 	fmt.Print("Message from the server: " + message)
+}
+
+func sendFile(conn net.Conn, fileName string) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// close file on exit and check for its returned error
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// make a buffer to keep chunks that are read
+	reader := bufio.NewReader(file)
+
+	for {
+		// read a chunk
+		s, err := reader.ReadString('\n')
+		for err == nil {
+			// send a chunk
+			fmt.Fprintf(conn, s+"\n")
+			handleRequest(conn)
+			s, err = reader.ReadString('\n')
+		}
+		// Send the last chunk
+		fmt.Fprintf(conn, s+"\n")
+		break
+	}
+
 }
