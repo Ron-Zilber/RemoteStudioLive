@@ -2,17 +2,19 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"os"
-	"strconv"
+	"strings"
 )
 
 const (
-	ConnHost = ""     // ConnHost - Empty string means listen on all available interfaces
-	ConnPort = "8080" // ConnPort - The port of the connection
-	ConnType = "tcp"  // ConnType - The type of the connection
+	ConnHost = ""    // ConnHost - Empty string means listen on all available interfaces
+	ConnPort = "80"  // ConnPort - The port of the connection
+	ConnType = "tcp" // ConnType - The type of the connection
 )
 
 func main() {
@@ -22,57 +24,42 @@ func main() {
 		connPort = os.Args[1]
 	}
 	// Listen for incoming connection.
-	l, err := net.Listen(ConnType, ":"+connPort)
+	ln, err := net.Listen(ConnType, ":"+connPort)
 	if err != nil {
-		fmt.Println("Error listening: ", err.Error())
-		os.Exit(1)
-	}
-
-	name, err := os.Hostname()
-	if err != nil {
-		fmt.Println("Error:", err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	// Close the listener when the application closes.
-	defer l.Close() // defer pushes the call to Close() to the stack s.t it will be executed before the server() function returning
-	host, _ := net.LookupHost(name)
-	fmt.Println("Listening on "+host[0]+":", connPort)
+	defer ln.Close()
+	fmt.Println("Listening on port", connPort)
+
+	// Listen for an incoming connection.
 	for {
-		// Listen for an incoming connection.
-		conn, err := l.Accept()
+		conn, err := ln.Accept()
+		fmt.Println("opened a new connection")
 		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+			log.Fatal(err)
 		}
-
-		// logs an incoming message
-
-		fmt.Printf("Received message %s -> %s\n", conn.RemoteAddr(), conn.LocalAddr())
-
-		// Handle connections in a new goroutine
+		// Handle incoming messages
 		go handleRequest(conn)
 	}
 }
 
-// Handles incoming requests
 func handleRequest(conn net.Conn) {
-	// Make a buffer to hold incoming data
-	buff := make([]byte, 1024)
-	// Read the incoming connection into the buffer
-	reqLen, err := conn.Read(buff)
-	if err != nil {
-		fmt.Println("Error reading:", err.Error())
-	}
-	// Builds the message
-	message := "Hi, I received your message!\nIt was "
-	message += strconv.Itoa(reqLen)
-	message += " bytes long and that's what it said:\n"
-	n := bytes.Index(buff, []byte{0})
-	message += string(buff[:n-1])
-	message += "\n"
+	// Handle incoming messages
+	defer conn.Close()
+	for {
+		message, err :=
+			bufio.NewReader(conn).ReadString('\n')
+		if message == "exit\n" || err == io.EOF {
+			fmt.Println(conn.RemoteAddr(), "Disconnected")
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	// Write the message in the connection channel
-	conn.Write([]byte(message))
-	// Close the connection when you're done with it
-	conn.Close()
+		fmt.Print("Message Received from " + conn.RemoteAddr().String() + " " + string(message))
+		newMessage := strings.ToUpper(message)
+		conn.Write([]byte(newMessage))
+	}
 }
