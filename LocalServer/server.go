@@ -28,7 +28,7 @@ func main() {
 	CheckError(err)
 	// Close the listener when the application closes.
 	defer ln.Close()
-	fmt.Println("Listening on", ln.Addr().String())
+	fmt.Println("Listening on port:", connPort)
 
 	// Listen for an incoming connection.
 	for {
