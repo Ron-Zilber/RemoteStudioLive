@@ -4,14 +4,14 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"os"
+	"log"
 )
 
 const (
 	ServerIP   = "172.23.175.237" // ServerIP   - Replace with the actual IP address of your server
-	ServerPort = "80"             // ServerPort - The port number of the server
+	ServerPort = "8080"             // ServerPort - The port number of the server
 	ConnType   = "tcp"            // ConnType   - The type of the connection
 )
 
