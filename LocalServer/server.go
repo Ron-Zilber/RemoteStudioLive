@@ -28,12 +28,12 @@ func main() {
 	CheckError(err)
 	// Close the listener when the application closes.
 	defer ln.Close()
-	fmt.Println("Listening on port", connPort)
+	fmt.Println("Listening on", ln.Addr().String())
 
 	// Listen for an incoming connection.
 	for {
 		conn, err := ln.Accept()
-		fmt.Println("opened a new connection")
+		fmt.Println("Connected to:", conn.RemoteAddr().String())
 		CheckError(err)
 		// Handle incoming messages
 		go handleRequest(conn)
