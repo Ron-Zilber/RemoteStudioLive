@@ -36,11 +36,11 @@ func main() {
 		fmt.Println("Connected to:", conn.RemoteAddr().String())
 		CheckError(err)
 		// Handle incoming messages
-		go handleRequest(conn)
+		go handleConnection(conn)
 	}
 }
 
-func handleRequest(conn net.Conn) {
+func handleConnection(conn net.Conn) {
 	// Handle incoming messages
 	defer conn.Close()
 	for {
