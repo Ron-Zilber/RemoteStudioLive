@@ -15,13 +15,16 @@ const (
 	ConnHost = ""     // ConnHost - Empty string means listen on all available interfaces
 	ConnPort = "8080" // ConnPort - The port of the connection
 	ConnType = "tcp"  // ConnType - The type of the connection
+	OpMode   = "default" // OpMode - The operation mode
 )
 
 func main() {
+	opMode := OpMode
 	// Enable port configuring from shell
 	connPort := ConnPort
-	if len(os.Args) > 1 {
+	if len(os.Args) > 2 {
 		connPort = os.Args[1]
+		opMode = os.Args[2]
 	}
 	// Listen for incoming connection.
 	ln, err := net.Listen(ConnType, ":"+connPort)
@@ -36,25 +39,42 @@ func main() {
 		fmt.Println("Connected to:", conn.RemoteAddr().String())
 		CheckError(err)
 		// Handle incoming messages
-		go handleConnection(conn)
+		go handleConnection(conn, opMode)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, opMode string) {
 	// Handle incoming messages
 	defer conn.Close()
-	for {
-		reader := bufio.NewReader(conn)
-		message, err :=
-			reader.ReadString('\n')
-		if message == "exit\n" || err == io.EOF {
-			fmt.Println(conn.RemoteAddr(), "Disconnected")
-			break
+	reader := bufio.NewReader(conn)
+	switch strings.TrimSpace(opMode) {
+	case "song":
+		buffer := make([]byte, bufio.MaxScanTokenSize)
+		for {
+			// Read chunk
+			bytesRead, err := reader.Read(buffer)
+			if err != nil {
+				if err != io.EOF {
+					log.Fatal(err)
+				}
+				break
+			}
+			// Send chunk back to the client
+			_, err = conn.Write(buffer[:bytesRead])
+			CheckError(err)
 		}
-		CheckError(err)
-		fmt.Print("Message Received from " + conn.RemoteAddr().String() + " " + string(message))
-		newMessage := strings.ToUpper(message)
-		conn.Write([]byte(newMessage))
+	default:
+		for {
+			message, err := reader.ReadString('\n')
+			if message == "exit\n" || err == io.EOF {
+				fmt.Println(conn.RemoteAddr(), "Disconnected")
+				break
+			}
+			CheckError(err)
+			fmt.Print("Message Received from " + conn.RemoteAddr().String() + " " + string(message))
+			newMessage := strings.ToUpper(message)
+			conn.Write([]byte(newMessage))
+		}
 	}
 }
 
