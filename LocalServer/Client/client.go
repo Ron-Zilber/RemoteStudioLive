@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 	"strconv"
@@ -19,6 +20,7 @@ const (
 	ConnType       = "tcp"                // ConnType   - The type of the connection
 	OpMode         = "default"            // OpMode - The operation mode of the client
 	SongFromClient = "SongFromClient.mp3" // SongFromClient - The song that echoed back from the server
+	StatisticsLog  = "StatisticsLog.txt"  // StatisticsLog - The file that logs the time measurements
 )
 
 func main() {
@@ -56,6 +58,25 @@ func sendMessage(conn net.Conn, opMode string) (status bool) {
 		sendSong(conn, "Eric Clapton - Nobody Knows You When You're Down & Out .mp3", opMode)
 		return false
 
+	case "measure":
+		deleteFile(StatisticsLog)
+		statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		checkError(err)
+		defer statisticsFile.Close()
+		count := 100
+		timeMeasures := make([]int64, count)
+		for i := 0; i < count; i++ {
+			deleteFile(SongFromClient)
+			timeMeasures[i] = sendSong(conn, "Eric Clapton - Nobody Knows You When You're Down & Out .mp3", opMode)
+			fmt.Fprint(statisticsFile, strconv.Itoa(i+1)+". Elapsed time:"+strconv.Itoa(int(timeMeasures[i]))+" Microseconds\n")
+		}
+		meanSendingTime := Mean(timeMeasures)
+		jitter := Jitter(timeMeasures)
+		fmt.Fprintln(statisticsFile, "") // Add an empty line
+		fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "Microseconds")
+		fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "Microseconds")
+		return false
+
 	default:
 		fmt.Print("Text to send: ")
 		text, err := reader.ReadString('\n')
@@ -91,6 +112,22 @@ func handleRequest(conn net.Conn, opMode string) {
 	reader := bufio.NewReader(conn)
 	switch strings.TrimSpace(opMode) {
 
+	case "measure":
+		songFile, err := os.OpenFile(SongFromClient, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		checkError(err)
+		defer songFile.Close()
+		buffer := make([]byte, bufio.MaxScanTokenSize)
+		// Read chunk
+		bytesRead, err := reader.Read(buffer)
+		if err != nil {
+			if err != io.EOF {
+				log.Fatal(err)
+			}
+			break
+		}
+		// Save chunk to the file
+		_, err = songFile.Write(buffer[:bytesRead])
+		checkError(err)
 	case "song":
 		songFile, err := os.OpenFile(SongFromClient, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		checkError(err)
@@ -145,8 +182,9 @@ func sendFile(conn net.Conn, fileName string, opMode string) {
 		break
 	}
 }
-func sendSong(conn net.Conn, fileName string, opMode string) {
+func sendSong(conn net.Conn, fileName string, opMode string) (timeMeasure int64) {
 	file, err := os.Open(fileName)
+	timeStampInitial := time.Now().UnixMicro()
 	checkError(err)
 	// close file on exit and check for its returned error
 	defer file.Close()
@@ -155,8 +193,9 @@ func sendSong(conn net.Conn, fileName string, opMode string) {
 	for {
 		// Read chunk
 		bytesReads, err := file.Read(buffer)
-		for err == nil {
+		for err == nil { // When EOF will be read, err != nil
 			// Send chunk
+
 			_, err = conn.Write(buffer[:bytesReads])
 			handleRequest(conn, opMode)
 			bytesReads, err = file.Read(buffer)
@@ -165,6 +204,9 @@ func sendSong(conn net.Conn, fileName string, opMode string) {
 		_, err = conn.Write(buffer[:bytesReads])
 		break
 	}
+	timeStampFinal := time.Now().UnixMicro()
+	elapsedTime := timeStampFinal - timeStampInitial
+	return elapsedTime
 }
 
 func pingServer(conn net.Conn, opMode string) {
@@ -207,4 +249,24 @@ func deleteFile(fileName string) error {
 		return err
 	}
 	return nil
+}
+
+// Mean calculates the mean value from a slice of int64.
+func Mean(values []int64) float64 {
+	sum := int64(0)
+	for _, v := range values {
+		sum += v
+	}
+	return float64(sum) / float64(len(values))
+}
+
+// Jitter calculates the jitter for a slice of int64.
+func Jitter(values []int64) float64 {
+	var quadDev float64
+	mean := Mean(values)
+	for _, v := range values {
+		quadDev += math.Pow(float64(v)-mean, 2)
+	}
+	quadDev = quadDev / float64(len(values))
+	return math.Sqrt(quadDev)
 }
