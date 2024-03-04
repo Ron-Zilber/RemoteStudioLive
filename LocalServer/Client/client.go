@@ -15,13 +15,18 @@ import (
 )
 
 const (
-	ServerIP       = "172.23.175.237"     // ServerIP   - Replace with the actual IP address of your server
-	ServerPort     = "8080"               // ServerPort - The port number of the server
-	ConnType       = "tcp"                // ConnType   - The type of the connection
-	OpMode         = "default"            // OpMode - The operation mode of the client
-	SongFromClient = "SongFromClient.mp3" // SongFromClient - The song that echoed back from the server
-	StatisticsLog  = "StatisticsLog.txt"  // StatisticsLog - The file that logs the time measurements
+	ServerIP       = "172.23.175.237"                                              // ServerIP   - Replace with the actual IP address of your server
+	ServerPort     = "8080"                                                        // ServerPort - The port number of the server
+	ConnType       = "tcp"                                                         // ConnType   - The type of the connection
+	OpMode         = "default"                                                     // OpMode - The operation mode of the client
+	SongFromClient = "SongFromClient.mp3"                                          // SongFromClient - The song that echoed back from the server
+	StatisticsLog  = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	SongName       = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
+	BufferSize     = bufio.MaxScanTokenSize / 10                                   // BufferSize - The size of the packets when transmitting a song
 )
+
+// Global Variables
+var songByteSlice []byte
 
 func main() {
 	// Enable server IP and port configuring from shell
@@ -34,7 +39,6 @@ func main() {
 	}
 	// Connect to the server
 	conn, err := net.Dial(ConnType, serverIP+":"+serverPort)
-	deleteFile(SongFromClient)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,28 +57,30 @@ func main() {
 
 func sendMessage(conn net.Conn, opMode string) (status bool) {
 	reader := bufio.NewReader(os.Stdin)
-	switch strings.TrimSpace(opMode) {
-	case "song":
-		sendSong(conn, "Eric Clapton - Nobody Knows You When You're Down & Out .mp3", opMode)
-		return false
 
-	case "measure":
+	switch strings.TrimSpace(opMode) {
+
+	//	case "song":
+	//		sendSong(conn, SongName, opMode)
+	//	return false
+
+	case "song":
 		deleteFile(StatisticsLog)
 		statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		checkError(err)
 		defer statisticsFile.Close()
-		count := 100
-		timeMeasures := make([]int64, count)
-		for i := 0; i < count; i++ {
-			deleteFile(SongFromClient)
-			timeMeasures[i] = sendSong(conn, "Eric Clapton - Nobody Knows You When You're Down & Out .mp3", opMode)
-			fmt.Fprint(statisticsFile, strconv.Itoa(i+1)+". Elapsed time:"+strconv.Itoa(int(timeMeasures[i]))+" Microseconds\n")
+		//count := 100
+		var timeMeasures []int64
+		timeMeasures = sendSong(conn, SongName, opMode)
+		for i, measure := range timeMeasures {
+			_, err := fmt.Fprint(statisticsFile, strconv.Itoa(i)+".: Delay: "+strconv.FormatInt(measure, 10)+" microseconds\n")
+			checkError(err)
 		}
 		meanSendingTime := Mean(timeMeasures)
 		jitter := Jitter(timeMeasures)
 		fmt.Fprintln(statisticsFile, "") // Add an empty line
-		fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "Microseconds")
-		fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "Microseconds")
+		fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "microseconds")
+		fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "microseconds")
 		return false
 
 	default:
@@ -103,7 +109,6 @@ func sendMessage(conn net.Conn, opMode string) (status bool) {
 		default:
 			fmt.Fprintf(conn, text+"\n")
 		}
-
 	}
 	return true
 }
@@ -112,26 +117,7 @@ func handleRequest(conn net.Conn, opMode string) {
 	reader := bufio.NewReader(conn)
 	switch strings.TrimSpace(opMode) {
 
-	case "measure":
-		songFile, err := os.OpenFile(SongFromClient, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-		checkError(err)
-		defer songFile.Close()
-		buffer := make([]byte, bufio.MaxScanTokenSize)
-		// Read chunk
-		bytesRead, err := reader.Read(buffer)
-		if err != nil {
-			if err != io.EOF {
-				log.Fatal(err)
-			}
-			break
-		}
-		// Save chunk to the file
-		_, err = songFile.Write(buffer[:bytesRead])
-		checkError(err)
 	case "song":
-		songFile, err := os.OpenFile(SongFromClient, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-		checkError(err)
-		defer songFile.Close()
 		buffer := make([]byte, bufio.MaxScanTokenSize)
 		// Read chunk
 		bytesRead, err := reader.Read(buffer)
@@ -141,9 +127,8 @@ func handleRequest(conn net.Conn, opMode string) {
 			}
 			break
 		}
-		// Save chunk to the file
-		_, err = songFile.Write(buffer[:bytesRead])
-		checkError(err)
+		// Save chunk to the byteSlice
+		songByteSlice = append(songByteSlice, buffer[:bytesRead]...)
 
 	default:
 		message, err := reader.ReadString('\n')
@@ -182,37 +167,36 @@ func sendFile(conn net.Conn, fileName string, opMode string) {
 		break
 	}
 }
-func sendSong(conn net.Conn, fileName string, opMode string) (timeMeasure int64) {
-	file, err := os.Open(fileName)
-	timeStampInitial := time.Now().UnixMicro()
+func sendSong(conn net.Conn, songFileName string, opMode string) (timeMeasure []int64) {
+	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	checkError(err)
 	// close file on exit and check for its returned error
 	defer file.Close()
+	var timeMeasures []int64
 	// make a buffer to keep chunks that are read
-	buffer := make([]byte, bufio.MaxScanTokenSize)
+	buffer := make([]byte, BufferSize)
 	for {
 		// Read chunk
 		bytesReads, err := file.Read(buffer)
 		for err == nil { // When EOF will be read, err != nil
 			// Send chunk
-
+			timeStampInitial := time.Now().UnixMicro()
 			_, err = conn.Write(buffer[:bytesReads])
 			handleRequest(conn, opMode)
+			timeStampFinal := time.Now().UnixMicro()
+			elapsedTime := timeStampFinal - timeStampInitial
+			timeMeasures = append(timeMeasures, elapsedTime)
 			bytesReads, err = file.Read(buffer)
 		}
 		// Send the last chunk
 		_, err = conn.Write(buffer[:bytesReads])
 		break
 	}
-	timeStampFinal := time.Now().UnixMicro()
-	elapsedTime := timeStampFinal - timeStampInitial
-	return elapsedTime
+	return timeMeasures
 }
 
 func pingServer(conn net.Conn, opMode string) {
-	i := 1
-	count := 100
-	frequency := 100 * time.Millisecond
+	i, count, frequency := 1, 100, 50*time.Millisecond
 	for i < count {
 		fmt.Fprintf(conn, "Ping "+strconv.Itoa(i)+"\n")
 		handleRequest(conn, opMode)
@@ -222,10 +206,7 @@ func pingServer(conn net.Conn, opMode string) {
 	fmt.Fprintf(conn, "Ping "+strconv.Itoa(i)+"\n") // Send the last ping
 }
 func pipeSongToMPG() {
-	mp3Data, err := os.ReadFile(SongFromClient)
-	checkError(err)
-	// Write the MP3 data to stdout
-	_, err = os.Stdout.Write(mp3Data)
+	_, err := os.Stdout.Write(songByteSlice)
 	checkError(err)
 }
 
@@ -262,7 +243,7 @@ func Mean(values []int64) float64 {
 
 // Jitter calculates the jitter for a slice of int64.
 func Jitter(values []int64) float64 {
-	var quadDev float64
+	quadDev := float64(0)
 	mean := Mean(values)
 	for _, v := range values {
 		quadDev += math.Pow(float64(v)-mean, 2)

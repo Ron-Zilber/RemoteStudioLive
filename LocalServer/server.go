@@ -62,17 +62,12 @@ func handleConnection(conn net.Conn, opMode string) {
 			// Read chunk
 			bytesRead, err := reader.Read(buffer)
 			if err != nil {
-				if err != io.EOF {
-					log.Fatal(err)
-				} else {
-					fmt.Println(conn.RemoteAddr(), "Disconnected")
-					break
-				}
+				fmt.Println(conn.RemoteAddr(), "Disconnected")
 				break
 			}
 			// Send chunk back to the client
-			_, err = conn.Write(buffer[:bytesRead])
-			CheckError(err)
+			_, writeErr := conn.Write(buffer[:bytesRead])
+			CheckError(writeErr)
 		}
 	default:
 		for {
