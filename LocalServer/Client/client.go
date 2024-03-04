@@ -11,18 +11,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	ServerIP       = "172.23.175.237"                                              // ServerIP   - Replace with the actual IP address of your server
-	ServerPort     = "8080"                                                        // ServerPort - The port number of the server
-	ConnType       = "tcp"                                                         // ConnType   - The type of the connection
-	OpMode         = "default"                                                     // OpMode - The operation mode of the client
-	SongFromClient = "SongFromClient.mp3"                                          // SongFromClient - The song that echoed back from the server
-	StatisticsLog  = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
-	SongName       = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
-	BufferSize     = bufio.MaxScanTokenSize / 10                                   // BufferSize - The size of the packets when transmitting a song
+	ServerIP      = "172.23.175.237"                                              // ServerIP   - Replace with the actual IP address of your server
+	ServerPort    = "8080"                                                        // ServerPort - The port number of the server
+	ConnType      = "tcp"                                                         // ConnType   - The type of the connection
+	OpMode        = "default"                                                     // OpMode - The operation mode of the client
+	StatisticsLog = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	SongName      = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
+	BufferSize    = bufio.MaxScanTokenSize / 32                                   // BufferSize - The size of the packets when transmitting a song
 )
 
 // Global Variables
@@ -43,44 +43,33 @@ func main() {
 		log.Fatal(err)
 	}
 	defer conn.Close()
+	// Create a channel to receive statistics
+	statsChannel := make(chan string, 1024)
+	// Create a wait group to synchronize goroutines
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	// Congruently run the statistics server
+	go statsServer(StatisticsLog, statsChannel, &waitGroup)
+
+	// Start to transmit media in according to the opMode
 	for {
-		if !sendMessage(conn, opMode) {
+		if !sendMessage(conn, statsChannel, opMode) {
 			break
 		}
 		handleRequest(conn, opMode)
 	}
 
-	if opMode == "song" {
-		pipeSongToMPG()
-	}
+	// Close the channel to signal the goroutine to exit
+	close(statsChannel)
+	// Wait for the goroutine to finish
+	waitGroup.Wait()
 }
 
-func sendMessage(conn net.Conn, opMode string) (status bool) {
+func sendMessage(conn net.Conn, statisticsChannel chan string, opMode string) bool {
 	reader := bufio.NewReader(os.Stdin)
-
 	switch strings.TrimSpace(opMode) {
-
-	//	case "song":
-	//		sendSong(conn, SongName, opMode)
-	//	return false
-
 	case "song":
-		deleteFile(StatisticsLog)
-		statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-		checkError(err)
-		defer statisticsFile.Close()
-		//count := 100
-		var timeMeasures []int64
-		timeMeasures = sendSong(conn, SongName, opMode)
-		for i, measure := range timeMeasures {
-			_, err := fmt.Fprint(statisticsFile, strconv.Itoa(i)+".: Delay: "+strconv.FormatInt(measure, 10)+" microseconds\n")
-			checkError(err)
-		}
-		meanSendingTime := Mean(timeMeasures)
-		jitter := Jitter(timeMeasures)
-		fmt.Fprintln(statisticsFile, "") // Add an empty line
-		fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "microseconds")
-		fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "microseconds")
+		sendSong(conn, statisticsChannel, SongName, opMode)
 		return false
 
 	default:
@@ -112,6 +101,27 @@ func sendMessage(conn net.Conn, opMode string) (status bool) {
 	}
 	return true
 }
+func sendSong(conn net.Conn, statisticsChannel chan<- string, songFileName string, opMode string) {
+	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
+	checkError(err)
+	// close file on exit and check for its returned error
+	defer file.Close()
+	// make a buffer to keep chunks that are read
+	buffer := make([]byte, BufferSize)
+	for {
+		bytesRead, err := file.Read(buffer)
+		if err != nil {
+			break
+		}
+		timeStampInitial := time.Now().UnixMilli()
+		_, err = conn.Write(buffer[:bytesRead])
+		handleRequest(conn, opMode)
+		timeStampFinal := time.Now().UnixMilli()
+		elapsedTime := timeStampFinal - timeStampInitial
+		statisticsChannel <- strconv.Itoa(int(elapsedTime))
+	}
+	return
+}
 
 func handleRequest(conn net.Conn, opMode string) {
 	reader := bufio.NewReader(conn)
@@ -128,7 +138,9 @@ func handleRequest(conn net.Conn, opMode string) {
 			break
 		}
 		// Save chunk to the byteSlice
-		songByteSlice = append(songByteSlice, buffer[:bytesRead]...)
+		chunk := buffer[:bytesRead]
+		//songByteSlice = append(songByteSlice, chunk...)
+		pipeSongToMPG(chunk)
 
 	default:
 		message, err := reader.ReadString('\n')
@@ -167,33 +179,6 @@ func sendFile(conn net.Conn, fileName string, opMode string) {
 		break
 	}
 }
-func sendSong(conn net.Conn, songFileName string, opMode string) (timeMeasure []int64) {
-	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
-	checkError(err)
-	// close file on exit and check for its returned error
-	defer file.Close()
-	var timeMeasures []int64
-	// make a buffer to keep chunks that are read
-	buffer := make([]byte, BufferSize)
-	for {
-		// Read chunk
-		bytesReads, err := file.Read(buffer)
-		for err == nil { // When EOF will be read, err != nil
-			// Send chunk
-			timeStampInitial := time.Now().UnixMicro()
-			_, err = conn.Write(buffer[:bytesReads])
-			handleRequest(conn, opMode)
-			timeStampFinal := time.Now().UnixMicro()
-			elapsedTime := timeStampFinal - timeStampInitial
-			timeMeasures = append(timeMeasures, elapsedTime)
-			bytesReads, err = file.Read(buffer)
-		}
-		// Send the last chunk
-		_, err = conn.Write(buffer[:bytesReads])
-		break
-	}
-	return timeMeasures
-}
 
 func pingServer(conn net.Conn, opMode string) {
 	i, count, frequency := 1, 100, 50*time.Millisecond
@@ -205,8 +190,8 @@ func pingServer(conn net.Conn, opMode string) {
 	}
 	fmt.Fprintf(conn, "Ping "+strconv.Itoa(i)+"\n") // Send the last ping
 }
-func pipeSongToMPG() {
-	_, err := os.Stdout.Write(songByteSlice)
+func pipeSongToMPG(byteSlice []byte) {
+	_, err := os.Stdout.Write(byteSlice)
 	checkError(err)
 }
 
@@ -230,6 +215,26 @@ func deleteFile(fileName string) error {
 		return err
 	}
 	return nil
+}
+
+func statsServer(fileName string, statsChannel chan string, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
+	var timeMeasures []int64
+	deleteFile(fileName)
+	statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	checkError(err)
+	defer statisticsFile.Close()
+	for measure := range statsChannel {
+		fmt.Fprintln(statisticsFile, "Delay: ", measure, " milliseconds")
+		measureToInt, _ := strconv.ParseInt(measure, 10, 64)
+		timeMeasures = append(timeMeasures, measureToInt)
+	}
+	//timeMeasures
+	meanSendingTime := Mean(timeMeasures)
+	jitter := Jitter(timeMeasures)
+	fmt.Fprint(statisticsFile, "\n") // Add an empty line
+	fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "milliseconds")
+	fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "milliseconds")
 }
 
 // Mean calculates the mean value from a slice of int64.
