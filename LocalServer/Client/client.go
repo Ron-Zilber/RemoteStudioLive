@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"image/color"
 	"io"
 	"log"
 	"math"
@@ -13,6 +14,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/image/font"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 )
 
 const (
@@ -22,7 +28,7 @@ const (
 	OpMode        = "default"                                                     // OpMode - The operation mode of the client
 	StatisticsLog = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
 	SongName      = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
-	BufferSize    = bufio.MaxScanTokenSize / 32                                   // BufferSize - The size of the packets when transmitting a song
+	BufferSize    = bufio.MaxScanTokenSize / 128                                  // BufferSize - The size of the packets when transmitting a song
 )
 
 // Global Variables
@@ -224,6 +230,7 @@ func statsServer(fileName string, statsChannel chan string, waitGroup *sync.Wait
 	statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	checkError(err)
 	defer statisticsFile.Close()
+
 	for measure := range statsChannel {
 		fmt.Fprintln(statisticsFile, "Delay: ", measure, " milliseconds")
 		measureToInt, _ := strconv.ParseInt(measure, 10, 64)
@@ -235,6 +242,8 @@ func statsServer(fileName string, statsChannel chan string, waitGroup *sync.Wait
 	fmt.Fprint(statisticsFile, "\n") // Add an empty line
 	fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "milliseconds")
 	fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "milliseconds")
+	err = plotByteSlice(timeMeasures)
+	checkError(err)
 }
 
 // Mean calculates the mean value from a slice of int64.
@@ -255,4 +264,48 @@ func Jitter(values []int64) float64 {
 	}
 	quadDev = quadDev / float64(len(values))
 	return math.Sqrt(quadDev)
+}
+
+// PlotByteSlice plots the values of a byte slice.
+func plotByteSlice(data []int64) error {
+	// Create a new plot
+	p := plot.New()
+
+	// Create a new scatter plotter
+	var points plotter.XYs
+	for i := 0; i < len(data); i += 100 {
+		points = append(points, plotter.XY{X: float64(i), Y: float64(data[i])})
+	}
+	s, err := plotter.NewScatter(points)
+	if err != nil {
+		return err
+	}
+	// Set color of the circles to blue and make them bold
+	s.GlyphStyle.Color = color.RGBA{R: 63, G: 127, B: 191, A: 255}
+	s.GlyphStyle.Radius = vg.Points(3) // Adjust the radius to make circles bold
+	// Add scatter plotter to the plot
+	p.Add(s)
+
+	// Add a line between circles
+	line, err := plotter.NewLine(points)
+	if err != nil {
+		return err
+	}
+	line.Color = color.RGBA{R: 200, G: 200, B: 200, A: 255} // Gray color
+	line.Dashes = []vg.Length{vg.Points(5), vg.Points(5)}   // Dash pattern
+	line.Width = vg.Points(0.5)                             // Line width
+	p.Add(line)
+
+	// Set labels for axes
+	p.Title.Text = "Packets Delay [milliseconds]"
+	p.Title.TextStyle.Font.Weight = font.WeightBold
+	p.Title.TextStyle.Font.Size = 14
+	p.X.Label.Text = "Packet Index"
+	p.X.Label.TextStyle.Font.Weight = font.WeightBold
+	p.Y.Label.Text = "Packet Delay [milliseconds]"
+	p.Y.Label.TextStyle.Font.Weight = font.WeightBold
+
+	// Save the plot to a file with additional white space around the plot
+	err = p.Save(14*vg.Inch, 6*vg.Inch, "Packets Delay Plot.png")
+	return err
 }
