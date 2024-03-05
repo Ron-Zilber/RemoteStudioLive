@@ -1,0 +1,3 @@
+
+Average elapsed time:  NaN milliseconds
+Jitter of the elapsed time:  NaN milliseconds

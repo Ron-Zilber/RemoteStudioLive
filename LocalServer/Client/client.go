@@ -28,7 +28,7 @@ const (
 	OpMode        = "default"                                                     // OpMode - The operation mode of the client
 	StatisticsLog = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
 	SongName      = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
-	BufferSize    = bufio.MaxScanTokenSize / 128                                  // BufferSize - The size of the packets when transmitting a song
+	BufferSize    = bufio.MaxScanTokenSize / 64                                   // BufferSize - The size of the packets when transmitting a song
 )
 
 // Global Variables
@@ -50,32 +50,34 @@ func main() {
 	}
 	defer conn.Close()
 	// Create a channel to receive statistics
-	statsChannel := make(chan string, 1024)
+	statsChannel := make(chan int64, BufferSize)
+	streamChannel := make(chan []byte, bufio.MaxScanTokenSize)
+
 	// Create a wait group to synchronize goroutines
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(1)
-	// Congruently run the statistics server
+	waitGroup.Add(2)
+
 	go statsServer(StatisticsLog, statsChannel, &waitGroup)
+	go streamServer(streamChannel, &waitGroup)
 
 	// Start to transmit media in according to the opMode
 	for {
-		if !sendMessage(conn, statsChannel, opMode) {
+		if !sendMessage(conn, statsChannel, opMode, streamChannel) {
 			break
 		}
-		handleRequest(conn, opMode)
+		handleRequest(conn, opMode, streamChannel)
 	}
-
-	// Close the channel to signal the goroutine to exit
-	close(statsChannel)
-	// Wait for the goroutine to finish
+	// Close the channels to signal the goroutines to exit
+	close(statsChannel); close(streamChannel)
+	// Wait for the goroutines to finish
 	waitGroup.Wait()
 }
 
-func sendMessage(conn net.Conn, statisticsChannel chan string, opMode string) bool {
+func sendMessage(conn net.Conn, statisticsChannel chan int64, opMode string, streamChannel chan []byte) bool {
 	reader := bufio.NewReader(os.Stdin)
 	switch strings.TrimSpace(opMode) {
 	case "song":
-		sendSong(conn, statisticsChannel, SongName, opMode)
+		sendSong(conn, statisticsChannel, SongName, opMode, streamChannel)
 		return false
 
 	default:
@@ -107,7 +109,7 @@ func sendMessage(conn net.Conn, statisticsChannel chan string, opMode string) bo
 	}
 	return true
 }
-func sendSong(conn net.Conn, statisticsChannel chan<- string, songFileName string, opMode string) {
+func sendSong(conn net.Conn, statisticsChannel chan<- int64, songFileName string, opMode string, streamChannel chan []byte) {
 	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	checkError(err)
 	// close file on exit and check for its returned error
@@ -119,17 +121,18 @@ func sendSong(conn net.Conn, statisticsChannel chan<- string, songFileName strin
 		if err != nil {
 			break
 		}
-		timeStampInitial := time.Now().UnixMilli()
+		timeStampInitial := time.Now().UnixMicro()
 		_, err = conn.Write(buffer[:bytesRead])
-		handleRequest(conn, opMode)
-		timeStampFinal := time.Now().UnixMilli()
+		handleRequest(conn, opMode, streamChannel)
+		timeStampFinal := time.Now().UnixMicro()
 		elapsedTime := timeStampFinal - timeStampInitial
-		statisticsChannel <- strconv.Itoa(int(elapsedTime))
+		statisticsChannel <- elapsedTime
+
 	}
 	return
 }
 
-func handleRequest(conn net.Conn, opMode string) {
+func handleRequest(conn net.Conn, opMode string, streamChannel chan []byte) {
 	reader := bufio.NewReader(conn)
 	switch strings.TrimSpace(opMode) {
 
@@ -145,8 +148,9 @@ func handleRequest(conn net.Conn, opMode string) {
 		}
 		// Save chunk to the byteSlice
 		chunk := buffer[:bytesRead]
-		//songByteSlice = append(songByteSlice, chunk...)
-		pipeSongToMPG(chunk)
+		songByteSlice = append(songByteSlice, chunk...)
+		//pipeSongToMPG(chunk)
+		streamChannel <- chunk
 
 	default:
 		message, err := reader.ReadString('\n')
@@ -177,7 +181,7 @@ func sendFile(conn net.Conn, fileName string, opMode string) {
 		for err == nil {
 			// send a chunk
 			fmt.Fprintf(conn, s+"\n")
-			handleRequest(conn, opMode)
+			handleRequest(conn, opMode, nil)
 			s, err = reader.ReadString('\n')
 		}
 		// Send the last chunk
@@ -190,7 +194,7 @@ func pingServer(conn net.Conn, opMode string) {
 	i, count, frequency := 1, 100, 50*time.Millisecond
 	for i < count {
 		fmt.Fprintf(conn, "Ping "+strconv.Itoa(i)+"\n")
-		handleRequest(conn, opMode)
+		handleRequest(conn, opMode, nil)
 		time.Sleep(frequency)
 		i++
 	}
@@ -223,7 +227,7 @@ func deleteFile(fileName string) error {
 	return nil
 }
 
-func statsServer(fileName string, statsChannel chan string, waitGroup *sync.WaitGroup) {
+func statsServer(fileName string, statsChannel chan int64, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	var timeMeasures []int64
 	deleteFile(fileName)
@@ -232,18 +236,30 @@ func statsServer(fileName string, statsChannel chan string, waitGroup *sync.Wait
 	defer statisticsFile.Close()
 
 	for measure := range statsChannel {
-		fmt.Fprintln(statisticsFile, "Delay: ", measure, " milliseconds")
-		measureToInt, _ := strconv.ParseInt(measure, 10, 64)
-		timeMeasures = append(timeMeasures, measureToInt)
+		fmt.Fprintln(statisticsFile, "Delay: ", measure, " microseconds")
+		timeMeasures = append(timeMeasures, measure)
 	}
+
 	//timeMeasures
 	meanSendingTime := Mean(timeMeasures)
 	jitter := Jitter(timeMeasures)
 	fmt.Fprint(statisticsFile, "\n") // Add an empty line
-	fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "milliseconds")
-	fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "milliseconds")
+	fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "microseconds")
+	fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "microseconds")
 	err = plotByteSlice(timeMeasures)
 	checkError(err)
+}
+
+func streamServer(streamChannel chan []byte, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
+	for {
+		chunk, ok := <-streamChannel
+		if !ok {
+			// The channel has been closed
+			return
+		}
+		pipeSongToMPG(chunk)
+	}
 }
 
 // Mean calculates the mean value from a slice of int64.
@@ -270,7 +286,6 @@ func Jitter(values []int64) float64 {
 func plotByteSlice(data []int64) error {
 	// Create a new plot
 	p := plot.New()
-
 	// Create a new scatter plotter
 	var points plotter.XYs
 	for i := 0; i < len(data); i += 100 {
@@ -297,12 +312,12 @@ func plotByteSlice(data []int64) error {
 	p.Add(line)
 
 	// Set labels for axes
-	p.Title.Text = "Packets Delay [milliseconds]"
+	p.Title.Text = "Packets Delay [microseconds]"
 	p.Title.TextStyle.Font.Weight = font.WeightBold
 	p.Title.TextStyle.Font.Size = 14
 	p.X.Label.Text = "Packet Index"
 	p.X.Label.TextStyle.Font.Weight = font.WeightBold
-	p.Y.Label.Text = "Packet Delay [milliseconds]"
+	p.Y.Label.Text = "Packet Delay [microseconds]"
 	p.Y.Label.TextStyle.Font.Weight = font.WeightBold
 
 	// Save the plot to a file with additional white space around the plot
