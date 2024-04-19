@@ -2,10 +2,10 @@
 package main
 
 import (
+	. "RemoteStudioLive/shared"
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -19,6 +19,7 @@ const (
 )
 
 func main() {
+
 	opMode := OpMode
 	// Enable port configuring from shell
 	connPort := ConnPort
@@ -73,12 +74,5 @@ func handleConnection(conn net.Conn, opMode string) {
 			newMessage := strings.ToUpper(message)
 			conn.Write([]byte(newMessage))
 		}
-	}
-}
-
-// CheckError General error handling
-func CheckError(err error) {
-	if err != nil {
-		log.Fatal(err)
 	}
 }
