@@ -1,7 +1,7 @@
 package main
 
 import (
-	. "RemoteStudioLive/shared"
+	. "RemoteStudioLive/SharedUtils"
 	"image/color"
 	"math"
 	"os"
@@ -31,6 +31,16 @@ func jitter(values []int64) float64 {
 	return math.Sqrt(quadDev)
 }
 
+// CalculateInterArrival compute the differences between consecutive elements in a byte slice using map and a lambda function
+func CalculateInterArrival(input []int64) []int64 {
+	var output []int64
+		for i := 0; i< len(input) - 1; i++{
+			output = append(output, input[i+1] - input[i])
+		}	
+	return output
+}
+
+
 func deleteFile(fileName string) error {
 	// Check if the file exists
 	if _, err := os.Stat(fileName); err == nil {
@@ -53,7 +63,7 @@ func pipeSongToMPG(byteSlice []byte) {
 }
 
 // PlotByteSlice plots the values of a byte slice.
-func plotByteSlice(data []int64) error {
+func plotByteSlice(data []int64,figName string, title string, xLabel string, yLabel string) error {
 	// Create a new plot
 	p := plot.New()
 	// Create a new scatter plotter
@@ -82,15 +92,15 @@ func plotByteSlice(data []int64) error {
 	p.Add(line)
 
 	// Set labels for axes
-	p.Title.Text = "Packets Delay [microseconds]"
+	p.Title.Text = title
 	p.Title.TextStyle.Font.Weight = font.WeightBold
 	p.Title.TextStyle.Font.Size = 14
-	p.X.Label.Text = "Packet Index"
+	p.X.Label.Text = xLabel
 	p.X.Label.TextStyle.Font.Weight = font.WeightBold
-	p.Y.Label.Text = "Packet Delay [microseconds]"
+	p.Y.Label.Text = yLabel
 	p.Y.Label.TextStyle.Font.Weight = font.WeightBold
 
 	// Save the plot to a file with additional white space around the plot
-	err = p.Save(14*vg.Inch, 6*vg.Inch, "Packets Delay Plot.png")
+	err = p.Save(14*vg.Inch, 6*vg.Inch, figName)
 	return err
 }

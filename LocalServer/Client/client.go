@@ -2,7 +2,7 @@
 package main
 
 import (
-	. "RemoteStudioLive/shared"
+	. "RemoteStudioLive/SharedUtils"
 	"bufio"
 	"fmt"
 	"log"
@@ -15,17 +15,14 @@ import (
 )
 
 const (
-	ServerIP            = "172.23.175.237"                                              // ServerIP   - Replace with the actual IP address of your server
-	ServerPort          = "8080"                                                        // ServerPort - The port number of the server
-	ConnType            = "tcp"                                                         // ConnType   - The type of the connection
-	OpMode              = "default"                                                     // OpMode - The operation mode of the client
-	StatisticsLog       = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
-	SongName            = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
-	PACKET_REQUEST_SONG = iota                                                          // PACKET_REQUEST_SONG - .
+	ServerIP          = "172.23.175.237"                                              // ServerIP   - Replace with the actual IP address of your server
+	ServerPort        = "8080"                                                        // ServerPort - The port number of the server
+	ConnType          = "tcp"                                                         // ConnType   - The type of the connection
+	OpMode            = "default"                                                     // OpMode - The operation mode of the client
+	StatisticsLog     = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	SongName          = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
+	PacketRequestSong = iota                                                          // PacketRequestSong - .
 )
-
-// Global Variables
-var songByteSlice []byte
 
 func main() {
 	// Enable server IP and port configuring from shell
@@ -41,7 +38,7 @@ func main() {
 	CheckError(err)
 	defer conn.Close()
 	// Create a channel to receive statistics
-	statsChannel := make(chan int64, BufferSize)
+	statsChannel := make(chan []int64, BufferSize)
 	streamChannel := make(chan []byte, bufio.MaxScanTokenSize)
 	handleResponseChannel := make(chan []byte, bufio.MaxScanTokenSize)
 
@@ -110,68 +107,83 @@ func sendSong(conn net.Conn, songFileName string) {
 	defer file.Close()
 	// make a buffer to keep chunks that are read
 
-	buffer := make([]byte, BufferSize-16)
+	buffer := make([]byte, DataFrameSize)
 	for {
-		//TODO: Move timeStampInitial to here
+		tInit := time.Now().UnixMicro()
 		bytesRead, err := file.Read(buffer)
 		if err != nil {
 			break
 		}
-		//TODO: timeStampProcessing := time.Now().UnixMicro()
-		timeStampInitial := time.Now().UnixMicro()
-		songPacket := Packet{PacketType: PACKET_REQUEST_SONG,
-			PacketInitTime: uint64(timeStampInitial),
-			DataSize:       uint32(bytesRead)}
-
-		copy(songPacket.PacketData[:], buffer)
+		tProcessing := time.Now().UnixMicro() - tInit
+		songPacket := ConstructPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
+		songPacket.SetData(buffer)
 		songPacket.SendPacket(conn)
 	}
 	return
 }
 
-func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan int64, waitGroup *sync.WaitGroup) {
+func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	for {
-
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
 		switch receivePacket.PacketType {
-		case PACKET_REQUEST_SONG:
+		case PacketRequestSong:
 			chunk := make([]byte, receivePacket.DataSize)
-			copy(chunk, receivePacket.PacketData[:])
+			copy(chunk, receivePacket.Data[:])
 
-			songByteSlice = append(songByteSlice, chunk...)
 			// Send the packet to the routine that pipelines the packets to mpg123
 			streamChannel <- chunk
 
 			timeStampFinal := time.Now().UnixMicro()
-			elapsedTime := timeStampFinal - int64(receivePacket.PacketInitTime)
-			statsChannel <- elapsedTime
-
+			roundTripTime := timeStampFinal - int64(receivePacket.InitTime)
+			statsChannel <- []int64{int64(receivePacket.InitTime), int64(receivePacket.ProcessingTime), roundTripTime}
 		}
 	}
 }
-func statsRoutine(fileName string, statsChannel chan int64, waitGroup *sync.WaitGroup) {
+func statsRoutine(fileName string, statsChannel chan []int64, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
-	var timeMeasures []int64
+	var roundTripTimes []int64
+	var processingTimes []int64
+	var initTimes []int64
 	deleteFile(fileName)
 	statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
 	defer statisticsFile.Close()
 
-	for measure := range statsChannel {
-		fmt.Fprintln(statisticsFile, "Delay: ", measure, " microseconds")
-		timeMeasures = append(timeMeasures, measure)
+	packetIndex := 0
+	for timeMeasures := range statsChannel {
+		initTime, roundTripTime, processingTime := timeMeasures[0], timeMeasures[1], timeMeasures[2]
+		if packetIndex%10 == 0 {
+			fmt.Fprintf(statisticsFile, "Packet %4d | Round Trip Time: %5d microseconds\n", packetIndex, roundTripTime)
+		}
+
+		roundTripTimes = append(roundTripTimes, roundTripTime)
+		processingTimes = append(processingTimes, processingTime)
+		initTimes = append(initTimes, initTime)
+		packetIndex++
 	}
 
-	//timeMeasures
-	meanSendingTime := mean(timeMeasures)
-	jitter := jitter(timeMeasures)
+	interArrivals := CalculateInterArrival(initTimes)
+	meanInterArrivals := int(mean(interArrivals))
+	meanSendingTime := int(mean(roundTripTimes))
+	rttJitter := int(jitter(roundTripTimes))
+
 	fmt.Fprint(statisticsFile, "\n") // Add an empty line
-	fmt.Fprintln(statisticsFile, "Average elapsed time: ", meanSendingTime, "microseconds")
-	fmt.Fprintln(statisticsFile, "Jitter of the elapsed time: ", jitter, "microseconds")
-	err = plotByteSlice(timeMeasures)
-	CheckError(err)
+	fmt.Fprintln(statisticsFile, "Average Round Trip Time:        ", meanSendingTime, "microseconds")
+	fmt.Fprintln(statisticsFile, "Round Trip Time Jitter:         ", rttJitter, "microseconds")
+	fmt.Fprintln(statisticsFile, "Average Inter-Arrival Time:     ", meanInterArrivals, "microseconds")
+	CheckError(plotByteSlice(roundTripTimes,
+		"Packets RTT Plot.png",
+		"Packets RTT [microseconds]",
+		"Packet Index",
+		"Packet RTT [microseconds]"))
+
+	CheckError(plotByteSlice(interArrivals,
+		"Inter-Arrival Times.png",
+		"Inter-Arrival Times [microseconds]",
+		"Packet Index",
+		"Inter-Arrival Time [microseconds]"))
 }
 
 func streamRoutine(streamChannel chan []byte, waitGroup *sync.WaitGroup) {
@@ -192,11 +204,9 @@ func handleRequest(conn net.Conn, streamChannel chan []byte) {
 	receivePacket.ReadPacket(conn)
 
 	switch receivePacket.PacketType {
-	case PACKET_REQUEST_SONG:
+	case PacketRequestSong:
 		chunk := make([]byte, receivePacket.DataSize)
-		copy(chunk, receivePacket.PacketData[:])
-
-		songByteSlice = append(songByteSlice, chunk...)
+		copy(chunk, receivePacket.Data[:])
 		streamChannel <- chunk
 
 	default:

@@ -2,7 +2,7 @@
 package main
 
 import (
-	. "RemoteStudioLive/shared"
+	. "RemoteStudioLive/SharedUtils"
 	"bufio"
 	"fmt"
 	"io"

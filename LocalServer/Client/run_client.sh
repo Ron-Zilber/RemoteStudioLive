@@ -9,4 +9,4 @@ fi
 ip_address="$1"
 
 # Run the Go program with specified IP address and 'song' argument
-go run utils.go client.go "$ip_address" 8080 song | mpg123 -
+go run ClientUtils.go client.go "$ip_address" 8080 song | mpg123 -
