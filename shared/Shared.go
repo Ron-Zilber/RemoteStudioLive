@@ -29,7 +29,8 @@ func CheckError(err error) {
 	}
 }
 
-func ReadPacket(conn net.Conn, packet *Packet) bool {
+// ReadPacket accepts a binary byte slice from the link and decode it into a packet structure
+func (packet *Packet) ReadPacket(conn net.Conn) bool {
 	buf := make([]byte, BufferSize)
 	packetRead := false
 
@@ -58,7 +59,8 @@ func ReadPacket(conn net.Conn, packet *Packet) bool {
 	return packetRead
 }
 
-func SendPacket(conn net.Conn, packet *Packet) {
+// SendPacket encodes a packet into a binary byte slice and send it through a link
+func (packet *Packet) SendPacket(conn net.Conn) {
 	buf := make([]byte, BufferSize)
 	binary.LittleEndian.PutUint32(buf[0:], packet.PacketType)
 	binary.LittleEndian.PutUint64(buf[4:], uint64(packet.PacketInitTime))

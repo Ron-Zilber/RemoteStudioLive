@@ -1,3 +1,6 @@
 {
-    "go.toolsEnvVars": {}
+    "go.toolsEnvVars": {},
+    "cSpell.words": [
+        "gonum"
+    ]
 }
