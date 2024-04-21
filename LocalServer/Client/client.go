@@ -110,7 +110,9 @@ func sendSong(conn net.Conn, songFileName string) {
 	buffer := make([]byte, DataFrameSize)
 	for {
 		tInit := time.Now().UnixMicro()
+		// TODO: Add sleep()
 		bytesRead, err := file.Read(buffer)
+		
 		if err != nil {
 			break
 		}
@@ -136,7 +138,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			streamChannel <- chunk
 
 			timeStampFinal := time.Now().UnixMicro()
-			roundTripTime := timeStampFinal - int64(receivePacket.InitTime)
+			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
 			statsChannel <- []int64{int64(receivePacket.InitTime), int64(receivePacket.ProcessingTime), roundTripTime}
 		}
 	}
