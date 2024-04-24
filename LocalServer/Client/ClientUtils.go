@@ -2,14 +2,34 @@ package main
 
 import (
 	. "RemoteStudioLive/SharedUtils"
+	"bufio"
 	"image/color"
 	"math"
 	"os"
+
 	"golang.org/x/image/font"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 )
+
+const (
+	ServerPort         = "8080"                                                        // ServerPort - The port number of the server
+	ConnType           = "tcp"                                                         // ConnType   - The type of the connection
+	OpMode             = "default"                                                     // OpMode - The operation mode of the client
+	StatisticsLog      = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	SongName           = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
+	PacketRequestSong  = iota                                                          // PacketRequestSong - .
+	PacketCloseChannel                                                                 // PacketCloseChannel - .
+)
+
+func initChannels() (chan []int64, chan []byte, chan []byte, chan string) {
+	statsChannel := make(chan []int64, BufferSize)
+	streamChannel := make(chan []byte, bufio.MaxScanTokenSize)
+	handleResponseChannel := make(chan []byte, bufio.MaxScanTokenSize)
+	endSessionChannel := make(chan string, bufio.MaxScanTokenSize)
+	return statsChannel, streamChannel, handleResponseChannel, endSessionChannel
+}
 
 // mean calculates the mean value from a slice of int64.
 func mean(values []int64) float64 {
@@ -34,12 +54,11 @@ func jitter(values []int64) float64 {
 // CalculateInterArrival compute the differences between consecutive elements in a byte slice using map and a lambda function
 func CalculateInterArrival(input []int64) []int64 {
 	var output []int64
-		for i := 0; i< len(input) - 1; i++{
-			output = append(output, input[i+1] - input[i])
-		}	
+	for i := 0; i < len(input)-1; i++ {
+		output = append(output, input[i+1]-input[i])
+	}
 	return output
 }
-
 
 func deleteFile(fileName string) error {
 	// Check if the file exists
@@ -63,7 +82,7 @@ func pipeSongToMPG(byteSlice []byte) {
 }
 
 // PlotByteSlice plots the values of a byte slice.
-func plotByteSlice(data []int64,figName string, title string, xLabel string, yLabel string) error {
+func plotByteSlice(data []int64, figName string, title string, xLabel string, yLabel string) error {
 	// Create a new plot
 	p := plot.New()
 	// Create a new scatter plotter

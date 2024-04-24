@@ -20,19 +20,11 @@ const (
 
 func main() {
 
-	opMode := OpMode
-	// Enable port configuring from shell
-	connPort := ConnPort
-	if len(os.Args) > 2 {
-		connPort = os.Args[1]
-		opMode = os.Args[2]
-	}
-	// Listen for incoming connection.
-	ln, err := net.Listen(ConnType, ":"+connPort)
+	connSpecs := InitConnSpecs(ConnType, os.Args[1], os.Args[2], os.Args[3])
+	ln, err := net.Listen(connSpecs.Type, ":"+connSpecs.Port)
 	CheckError(err)
-	// Close the listener when the application closes.
 	defer ln.Close()
-	fmt.Println("Listening on port:", connPort)
+	fmt.Println("Listening on " + connSpecs.IP + ":" + connSpecs.Port)
 
 	// Listen for an incoming connection.
 	for {
@@ -40,7 +32,7 @@ func main() {
 		fmt.Println("Connected to:", conn.RemoteAddr().String())
 		CheckError(err)
 		// Handle incoming messages
-		go handleConnection(conn, opMode)
+		go handleConnection(conn, connSpecs.OpMode)
 	}
 }
 

@@ -24,6 +24,23 @@ type Packet struct {
 	Data           [DataFrameSize]byte
 }
 
+// ConnSpecs structs the specifications for the connection
+type ConnSpecs struct {
+	Type string
+	IP   string
+	Port string
+	OpMode   string
+}
+
+// InitConnSpecs constructs Connection
+func InitConnSpecs(connType string, connIP string, connPort string, opMode string) *ConnSpecs {
+	return &ConnSpecs{
+		Type: connType,
+		IP:   connIP,
+		Port: connPort,
+		OpMode:   opMode,
+	}
+}
 
 // CheckError General error handling
 func CheckError(err error) {
@@ -74,15 +91,16 @@ func (packet *Packet) SendPacket(conn net.Conn) {
 	conn.Write(buf)
 }
 
-func ConstructPacket(packetType int, initTime int64, processingTime int64, dataSize int) *Packet{
+// InitPacket initializing a packet
+func InitPacket(packetType int, initTime int64, processingTime int64, dataSize int) *Packet {
 	return &Packet{
-		PacketType: uint32(packetType),
+		PacketType:     uint32(packetType),
 		InitTime:       uint64(initTime),
 		ProcessingTime: uint64(processingTime),
 		DataSize:       uint32(dataSize),
-		} 
+	}
 }
-
-func (packet *Packet) SetData(dataBuffer []byte){
+// SetData sets the data for a packet
+func (packet *Packet) SetData(dataBuffer []byte) {
 	copy(packet.Data[:], dataBuffer)
 }
