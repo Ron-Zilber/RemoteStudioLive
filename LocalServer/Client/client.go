@@ -12,7 +12,7 @@ import (
 
 func main() {
 
-	connSpecs := InitConnSpecs(ConnType, os.Args[1], os.Args[2], os.Args[3])
+	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	conn, err := net.Dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
 	defer conn.Close()

@@ -11,10 +11,6 @@ import (
 	"strings"
 )
 
-const (
-	ConnType = "tcp"     // ConnType - The type of the connection
-)
-
 func main() {
 
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])

@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	ServerPort         = "8080"                                                        // ServerPort - The port number of the server
-	ConnType           = "tcp"                                                         // ConnType   - The type of the connection
-	OpMode             = "default"                                                     // OpMode - The operation mode of the client
 	StatisticsLog      = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
 	SongName           = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
 	PacketRequestSong  = iota                                                          // PacketRequestSong - .
