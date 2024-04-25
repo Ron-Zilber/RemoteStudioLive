@@ -12,15 +12,12 @@ import (
 )
 
 const (
-	ConnHost = ""        // ConnHost - Empty string means listen on all available interfaces
-	ConnPort = "8080"    // ConnPort - The port of the connection
 	ConnType = "tcp"     // ConnType - The type of the connection
-	OpMode   = "default" // OpMode - The operation mode
 )
 
 func main() {
 
-	connSpecs := InitConnSpecs(ConnType, os.Args[1], os.Args[2], os.Args[3])
+	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	ln, err := net.Listen(connSpecs.Type, ":"+connSpecs.Port)
 	CheckError(err)
 	defer ln.Close()

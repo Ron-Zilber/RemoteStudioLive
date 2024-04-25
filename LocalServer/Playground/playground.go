@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/gordonklaus/portaudio"
 	"time"
+
+	"github.com/gordonklaus/portaudio"
 )
 
-func main1() {
+func main() {
 	portaudio.Initialize()
 	defer portaudio.Terminate()
 	e := newEcho(time.Second / 3)

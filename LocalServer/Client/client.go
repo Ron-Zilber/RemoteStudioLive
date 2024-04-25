@@ -49,7 +49,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string)
 	// Send the song to the server (as packets)
 	for {
 		tInit := time.Now().UnixMicro()
-		//time.Sleep(10000000)
+		//time.Sleep(100000)
 		bytesRead, err := file.Read(buffer)
 
 		if err != nil {
