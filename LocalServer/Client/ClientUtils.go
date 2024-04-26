@@ -15,17 +15,19 @@ import (
 
 const (
 	StatisticsLog      = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	LogFile            = "log.txt"                                                     // LogFile - The file that is used for print and debug
 	SongName           = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
 	PacketRequestSong  = iota                                                          // PacketRequestSong - .
 	PacketCloseChannel                                                                 // PacketCloseChannel - .
 )
 
-func initChannels() (chan []int64, chan []byte, chan []byte, chan string) {
+func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
 	statsChannel := make(chan []int64, BufferSize)
 	streamChannel := make(chan []byte, bufio.MaxScanTokenSize)
 	handleResponseChannel := make(chan []byte, bufio.MaxScanTokenSize)
 	endSessionChannel := make(chan string, bufio.MaxScanTokenSize)
-	return statsChannel, streamChannel, handleResponseChannel, endSessionChannel
+	logChannel := make(chan string, bufio.MaxScanTokenSize)
+	return statsChannel, streamChannel, handleResponseChannel, endSessionChannel, logChannel
 }
 
 // mean calculates the mean value from a slice of int64.
@@ -119,4 +121,8 @@ func plotByteSlice(data []int64, figName string, title string, xLabel string, yL
 	// Save the plot to a file with additional white space around the plot
 	err = p.Save(14*vg.Inch, 6*vg.Inch, figName)
 	return err
+}
+
+func log(logChannel chan string, message string){
+	logChannel <- message
 }

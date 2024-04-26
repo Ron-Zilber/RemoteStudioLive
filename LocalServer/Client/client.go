@@ -18,13 +18,14 @@ func main() {
 	defer conn.Close()
 
 	// Create channels parallel sending, receiving, streaming and collecting messages.
-	statsChannel, streamChannel, handleResponseChannel, endSessionChannel := initChannels()
+	statsChannel, streamChannel, handleResponseChannel, endSessionChannel, logChannel := initChannels()
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(3)
-	go statsRoutine(StatisticsLog, statsChannel, &waitGroup)
-	go streamRoutine(streamChannel, &waitGroup)
-	go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, &waitGroup)
+	waitGroup.Add(4)
+	go logRoutine(LogFile, logChannel, &waitGroup)
+	go statsRoutine(StatisticsLog, statsChannel, logChannel, &waitGroup)
+	go streamRoutine(streamChannel, logChannel, &waitGroup)
+	go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 
 	// Close resources and synchronize goroutines
 	defer func() {
@@ -32,15 +33,16 @@ func main() {
 		close(streamChannel)
 		close(handleResponseChannel)
 		close(endSessionChannel)
+		close(logChannel)
 
 		// Wait for the goroutines to finish
 		waitGroup.Wait()
 	}()
 
-	sendSong(conn, SongName, endSessionChannel)
+	sendSong(conn, SongName, endSessionChannel, logChannel)
 }
 
-func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string) {
+func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string, logChannel chan string) {
 	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	CheckError(err)
 	defer file.Close()
@@ -76,9 +78,9 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string)
 	}
 }
 
-func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, waitGroup *sync.WaitGroup) {
+func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
-	//defer fmt.Println("handleResponseRoutine Done")
+	defer log(logChannel, "handleResponseRoutine Done")
 	for {
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
@@ -98,19 +100,37 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			endSessionChannel <- "endSession"
 			return
 
-		//default:
-		//return
 		}
 	}
 }
-func statsRoutine(fileName string, statsChannel chan []int64, waitGroup *sync.WaitGroup) {
+
+func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
+	//defer fmt.Println("logRoutine Done")
+
+	CheckError(deleteFile(fileName))
+	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	CheckError(err)
+	defer logFile.Close()
+
+	for {
+		logMessage, ok := <-logChannel
+		if !ok {
+			// The channel has been closed
+			break
+		}
+		fmt.Fprintln(logFile, logMessage)
+	}
+}
+
+func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	//defer fmt.Println("statsRoutine Done")
 	var roundTripTimes []int64
 	var processingTimes []int64
 	var arrivalTimes []int64
-	deleteFile(fileName)
-	statisticsFile, err := os.OpenFile(StatisticsLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	CheckError(deleteFile(fileName))
+	statisticsFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
 	defer statisticsFile.Close()
 
@@ -157,7 +177,7 @@ func statsRoutine(fileName string, statsChannel chan []int64, waitGroup *sync.Wa
 	}
 }
 
-func streamRoutine(streamChannel chan []byte, waitGroup *sync.WaitGroup) {
+func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	//defer fmt.Println("streamingRoutine Done")
 	for {
