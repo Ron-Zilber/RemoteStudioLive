@@ -63,6 +63,11 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string)
 		songPacket.SendPacket(conn)
 	}
 	// Wait until communication is done
+
+	// TODO: Uncomment these lines: ??
+	// packet := Packet{PacketType: PacketCloseChannel}
+	// packet.SendPacket(conn)
+
 	for {
 		msg := <-endSessionChannel
 		if msg == "endSession" {
@@ -93,8 +98,8 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			endSessionChannel <- "endSession"
 			return
 
-		default:
-			return
+		//default:
+		//return
 		}
 	}
 }

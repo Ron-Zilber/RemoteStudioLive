@@ -4,7 +4,6 @@ package sharedutils
 import (
 	"bufio"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"net"
 )
@@ -26,19 +25,19 @@ type Packet struct {
 
 // ConnSpecs structs the specifications for the connection
 type ConnSpecs struct {
-	Type string
-	IP   string
-	Port string
-	OpMode   string
+	Type   string
+	IP     string
+	Port   string
+	OpMode string
 }
 
 // InitConnSpecs constructs Connection
 func InitConnSpecs(connType string, connIP string, connPort string, opMode string) *ConnSpecs {
 	return &ConnSpecs{
-		Type: connType,
-		IP:   connIP,
-		Port: connPort,
-		OpMode:   opMode,
+		Type:   connType,
+		IP:     connIP,
+		Port:   connPort,
+		OpMode: opMode,
 	}
 }
 
@@ -56,10 +55,7 @@ func (packet *Packet) ReadPacket(conn net.Conn) bool {
 
 	for {
 		packetLen, err := conn.Read(buf)
-		if err != nil {
-			fmt.Println("packet read err")
-			break
-		}
+		CheckError(err)
 
 		if packetLen == BufferSize {
 			packetRead = true
@@ -88,7 +84,8 @@ func (packet *Packet) SendPacket(conn net.Conn) {
 	binary.LittleEndian.PutUint64(buf[12:], uint64(packet.ProcessingTime))
 	binary.LittleEndian.PutUint32(buf[20:], packet.DataSize)
 	copy(buf[24:BufferSize], packet.Data[0:packet.DataSize])
-	conn.Write(buf)
+	_, err := conn.Write(buf)
+	CheckError(err)
 }
 
 // InitPacket initializing a packet
@@ -100,6 +97,7 @@ func InitPacket(packetType int, initTime int64, processingTime int64, dataSize i
 		DataSize:       uint32(dataSize),
 	}
 }
+
 // SetData sets the data for a packet
 func (packet *Packet) SetData(dataBuffer []byte) {
 	copy(packet.Data[:], dataBuffer)
