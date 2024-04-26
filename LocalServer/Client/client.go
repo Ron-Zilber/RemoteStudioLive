@@ -22,17 +22,20 @@ func main() {
 
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(4)
-	go logRoutine(LogFile, logChannel, &waitGroup)
-	go statsRoutine(StatisticsLog, statsChannel, logChannel, &waitGroup)
-	go streamRoutine(streamChannel, logChannel, &waitGroup)
-	go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
+	{
+		go logRoutine(LogFile, logChannel, &waitGroup)
+		go statsRoutine(StatisticsLog, statsChannel, logChannel, &waitGroup)
+		go streamRoutine(streamChannel, logChannel, &waitGroup)
+		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
+	}
 
 	// Close resources and synchronize goroutines
 	defer func() {
+		close(endSessionChannel)
+		close(handleResponseChannel)
 		close(statsChannel)
 		close(streamChannel)
-		close(handleResponseChannel)
-		close(endSessionChannel)
+		time.Sleep(4 * time.Minute)
 		close(logChannel)
 
 		// Wait for the goroutines to finish
@@ -40,12 +43,14 @@ func main() {
 	}()
 
 	sendSong(conn, SongName, endSessionChannel, logChannel)
+	log(logChannel, "Exit Code 0")
 }
 
 func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string, logChannel chan string) {
 	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	CheckError(err)
 	defer file.Close()
+	defer log(logChannel, "sendSong Done")
 
 	buffer := make([]byte, DataFrameSize)
 	// Send the song to the server (as packets)
@@ -54,7 +59,8 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 		//time.Sleep(100000)
 		bytesRead, err := file.Read(buffer)
 
-		if err != nil {
+		if err != nil { // When reading EOF
+			log(logChannel, "sendSong err:"+err.Error())
 			packet := Packet{PacketType: PacketCloseChannel}
 			packet.SendPacket(conn)
 			break
@@ -66,19 +72,22 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	}
 	// Wait until communication is done
 
-	// TODO: Uncomment these lines: ??
-	// packet := Packet{PacketType: PacketCloseChannel}
-	// packet.SendPacket(conn)
-
 	for {
 		msg := <-endSessionChannel
-		if msg == "endSession" {
+		switch msg {
+		case "endSession":
+			log(logChannel, "endSessionChannel got 'endSession' ")
+			//time.Sleep(3*time.Second)
 			return
+
+		default:
+			log(logChannel, "endSessionChannel got an unexpected message")
 		}
 	}
 }
 
 func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {
+	log(logChannel, "handleResponseRoutine Start")
 	defer waitGroup.Done()
 	defer log(logChannel, "handleResponseRoutine Done")
 	for {
@@ -98,16 +107,18 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
+			log(logChannel, "handleResponseRoutine got 'endSession' message")
 			return
 
+		default:
+			log(logChannel, "handleResponseRoutine got an unexpected message ")
 		}
 	}
 }
 
 func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
-	//defer fmt.Println("logRoutine Done")
-
+	log(logChannel, "logRoutine Start")
 	CheckError(deleteFile(fileName))
 	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
@@ -115,17 +126,20 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 
 	for {
 		logMessage, ok := <-logChannel
+		_ = logMessage
 		if !ok {
 			// The channel has been closed
 			break
 		}
-		fmt.Fprintln(logFile, logMessage)
+			fmt.Fprintln(logFile, logMessage)
 	}
+	fmt.Fprintf(logFile, "logRoutine Done")
 }
 
 func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
+	log(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
-	//defer fmt.Println("statsRoutine Done")
+	defer log(logChannel, "statsRoutine Done")
 	var roundTripTimes []int64
 	var processingTimes []int64
 	var arrivalTimes []int64
@@ -178,8 +192,9 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 }
 
 func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup) {
+	log(logChannel, "streamRoutine Start")
 	defer waitGroup.Done()
-	//defer fmt.Println("streamingRoutine Done")
+	defer log(logChannel, "streamRoutine Done")
 	for {
 		chunk, ok := <-streamChannel
 		if !ok {
