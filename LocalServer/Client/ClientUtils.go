@@ -3,10 +3,16 @@ package main
 import (
 	. "RemoteStudioLive/SharedUtils"
 	"bufio"
+	"errors"
 	"image/color"
+	"io"
 	"math"
 	"os"
+	"os/signal"
+	"time"
 
+	"github.com/MarkKremer/microphone"
+	"github.com/gopxl/beep/wav"
 	"golang.org/x/image/font"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -20,6 +26,11 @@ const (
 	PacketRequestSong  = iota                                                          // PacketRequestSong - .
 	PacketCloseChannel                                                                 // PacketCloseChannel - .
 )
+
+type myWriter struct {
+	buf []byte
+	pos int
+}
 
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
 	statsChannel := make(chan []int64, BufferSize)
@@ -80,6 +91,12 @@ func pipeSongToMPG(byteSlice []byte) {
 	CheckError(err)
 }
 
+
+func pipeSongToSpeaker(byteSlice []byte){
+	
+	
+}
+
 // PlotByteSlice plots the values of a byte slice.
 func plotByteSlice(data []int64, figName string, title string, xLabel string, yLabel string) error {
 	// Create a new plot
@@ -123,6 +140,79 @@ func plotByteSlice(data []int64, figName string, title string, xLabel string, yL
 	return err
 }
 
-func log(logChannel chan string, message string){
+func logMessage(logChannel chan string, message string) {
 	logChannel <- message
+}
+
+// TODO: re-write record function
+func record(duration time.Duration) myWriter {
+	err := microphone.Init()
+	CheckError(err)
+	defer microphone.Terminate()
+
+	stream, format, err := microphone.OpenDefaultStream(44100, 2)
+	CheckError(err)
+
+	defer stream.Close()
+
+	signalBuffer := &myWriter{buf: make([]byte, 0, 2<<20)}
+
+	// Stop the stream when the user tries to quit the program.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, os.Kill)
+	go func() {
+		<-sig
+		stream.Stop()
+		stream.Close()
+	}()
+
+	stream.Start()
+
+	// Create a timer to stop the recording after the specified duration
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case <-time.After(duration):
+			stream.Stop()
+			stream.Close()
+			close(stop)
+		}
+	}()
+
+	err = wav.Encode(signalBuffer, stream, format)
+	CheckError(err)
+	<-stop // Wait until the recording is stopped
+	return *signalBuffer
+}
+
+func (m *myWriter) Write(p []byte) (n int, err error) {
+	minCap := m.pos + len(p)
+	if minCap > cap(m.buf) { // Make sure buf has enough capacity:
+		buf2 := make([]byte, len(m.buf), minCap+len(p)) // add some extra
+		copy(buf2, m.buf)
+		m.buf = buf2
+	}
+	if minCap > len(m.buf) {
+		m.buf = m.buf[:minCap]
+	}
+	copy(m.buf[m.pos:], p)
+	m.pos += len(p)
+	return len(p), nil
+}
+
+func (m *myWriter) Seek(offset int64, whence int) (int64, error) {
+	newPos, offs := 0, int(offset)
+	switch whence {
+	case io.SeekStart:
+		newPos = offs
+	case io.SeekCurrent:
+		newPos = m.pos + offs
+	case io.SeekEnd:
+		newPos = len(m.buf) + offs
+	}
+	if newPos < 0 {
+		return 0, errors.New("negative result pos")
+	}
+	m.pos = newPos
+	return int64(newPos), nil
 }

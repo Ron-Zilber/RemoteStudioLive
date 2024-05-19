@@ -43,24 +43,24 @@ func main() {
 	}()
 
 	sendSong(conn, SongName, endSessionChannel, logChannel)
-	log(logChannel, "Exit Code 0")
+	logMessage(logChannel, "Exit Code 0")
 }
 
 func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string, logChannel chan string) {
 	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	CheckError(err)
 	defer file.Close()
-	defer log(logChannel, "sendSong Done")
+	defer logMessage(logChannel, "sendSong Done")
 
 	buffer := make([]byte, DataFrameSize)
 	// Send the song to the server (as packets)
 	for {
 		tInit := time.Now().UnixMicro()
-		//time.Sleep(100000)
+		time.Sleep(100000)
 		bytesRead, err := file.Read(buffer)
 
 		if err != nil { // When reading EOF
-			log(logChannel, "sendSong err:"+err.Error())
+			logMessage(logChannel, "sendSong err:"+err.Error())
 			packet := Packet{PacketType: PacketCloseChannel}
 			packet.SendPacket(conn)
 			break
@@ -76,20 +76,20 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 		msg := <-endSessionChannel
 		switch msg {
 		case "endSession":
-			log(logChannel, "endSessionChannel got 'endSession' ")
+			logMessage(logChannel, "endSessionChannel got 'endSession' ")
 			//time.Sleep(3*time.Second)
 			return
 
 		default:
-			log(logChannel, "endSessionChannel got an unexpected message")
+			logMessage(logChannel, "endSessionChannel got an unexpected message")
 		}
 	}
 }
 
 func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {
-	log(logChannel, "handleResponseRoutine Start")
+	logMessage(logChannel, "handleResponseRoutine Start")
 	defer waitGroup.Done()
-	defer log(logChannel, "handleResponseRoutine Done")
+	defer logMessage(logChannel, "handleResponseRoutine Done")
 	for {
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
@@ -107,18 +107,18 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
-			log(logChannel, "handleResponseRoutine got 'endSession' message")
+			logMessage(logChannel, "handleResponseRoutine got 'endSession' message")
 			return
 
 		default:
-			log(logChannel, "handleResponseRoutine got an unexpected message ")
+			logMessage(logChannel, "handleResponseRoutine got an unexpected message ")
 		}
 	}
 }
 
 func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
-	log(logChannel, "logRoutine Start")
+	logMessage(logChannel, "logRoutine Start")
 	CheckError(deleteFile(fileName))
 	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
@@ -137,9 +137,9 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 }
 
 func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
-	log(logChannel, "statsRoutine Start")
+	logMessage(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
-	defer log(logChannel, "statsRoutine Done")
+	defer logMessage(logChannel, "statsRoutine Done")
 	var roundTripTimes []int64
 	var processingTimes []int64
 	var arrivalTimes []int64
@@ -192,9 +192,9 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 }
 
 func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup) {
-	log(logChannel, "streamRoutine Start")
+	logMessage(logChannel, "streamRoutine Start")
 	defer waitGroup.Done()
-	defer log(logChannel, "streamRoutine Done")
+	defer logMessage(logChannel, "streamRoutine Done")
 	for {
 		chunk, ok := <-streamChannel
 		if !ok {
