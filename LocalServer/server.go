@@ -11,8 +11,12 @@ import (
 	"strings"
 )
 
-func main() {
+// Server type
+type Server struct {
+	specs ConnSpecs
+}
 
+func (server *Server) start() {
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	ln, err := net.Listen(connSpecs.Type, ":"+connSpecs.Port)
 	CheckError(err)
@@ -22,11 +26,18 @@ func main() {
 	// Listen for an incoming connection.
 	for {
 		conn, err := ln.Accept()
-		fmt.Println("Connected to:", conn.RemoteAddr().String())
 		CheckError(err)
+		fmt.Println("Connected to:", conn.RemoteAddr().String())
+
 		// Handle incoming messages
 		go handleConnection(conn, connSpecs.OpMode)
 	}
+
+}
+
+func main() {
+	server := &Server{}
+	server.start()
 }
 
 func handleConnection(conn net.Conn, opMode string) {
