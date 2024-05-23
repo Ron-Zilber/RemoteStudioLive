@@ -13,15 +13,16 @@ import (
 
 // Server type
 type Server struct {
-	specs ConnSpecs
+	connSpecs ConnSpecs
 }
 
 func (server *Server) start() {
-	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
-	ln, err := net.Listen(connSpecs.Type, ":"+connSpecs.Port)
+	specs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
+	server.connSpecs = *specs
+	ln, err := net.Listen(server.connSpecs.Type, ":"+server.connSpecs.Port)
 	CheckError(err)
 	defer ln.Close()
-	fmt.Println("Listening on " + connSpecs.IP + ":" + connSpecs.Port)
+	fmt.Println("Listening on " + server.connSpecs.IP + ":" + server.connSpecs.Port)
 
 	// Listen for an incoming connection.
 	for {
@@ -30,7 +31,7 @@ func (server *Server) start() {
 		fmt.Println("Connected to:", conn.RemoteAddr().String())
 
 		// Handle incoming messages
-		go handleConnection(conn, connSpecs.OpMode)
+		go handleConnection(conn, server.connSpecs.OpMode)
 	}
 
 }
