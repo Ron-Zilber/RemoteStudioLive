@@ -33,7 +33,6 @@ func (server *Server) start() {
 		// Handle incoming messages
 		go handleConnection(conn, server.connSpecs.OpMode)
 	}
-
 }
 
 func main() {

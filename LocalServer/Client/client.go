@@ -43,6 +43,7 @@ func main() {
 	}()
 
 	sendSong(conn, SongName, endSessionChannel, logChannel)
+	//sendRecord(conn, endSessionChannel, logChannel)
 	logMessage(logChannel, "Exit Code 0")
 }
 
@@ -86,6 +87,35 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	}
 }
 
+func sendRecord(conn net.Conn, endSessionChannel chan string, logChannel chan string) {
+	defer logMessage(logChannel, "sendRecord Done")
+
+	for {
+		//tInit := time.Now().UnixMilli()
+		//time.Sleep(time.Millisecond)
+		fileName := time.Now().String()
+		record(fileName, 3)
+		recordPacket := Packet{PacketType: PacketRecord}
+		fileNameBytes := []byte(fileName)
+		recordPacket.Data = [1000]byte(fileNameBytes)
+		recordPacket.SendPacket(conn)
+		//tProcessing := time.Now().UnixMilli() - tInit
+		//songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
+		//songPacket.SetData(buffer)
+		//songPacket.SendPacket(conn)
+
+		select {
+		case <-time.After(10 * time.Second):
+			logMessage(logChannel, "timeout")
+			packet := Packet{PacketType: PacketCloseChannel}
+			packet.SendPacket(conn)
+			break
+
+		default:
+		}
+	}
+}
+
 func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	logMessage(logChannel, "handleResponseRoutine Start")
 	defer waitGroup.Done()
@@ -104,6 +134,9 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			timeStampFinal := time.Now().UnixMilli()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
 			statsChannel <- []int64{timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
+
+		case PacketRecord:
+			streamChannel <- receivePacket.Data[:]
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -131,7 +164,7 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 			// The channel has been closed
 			break
 		}
-			fmt.Fprintln(logFile, logMessage)
+		fmt.Fprintln(logFile, logMessage)
 	}
 	fmt.Fprintf(logFile, "logRoutine Done")
 }
@@ -140,9 +173,11 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 	logMessage(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
-	var roundTripTimes []int64
-	var processingTimes []int64
-	var arrivalTimes []int64
+	var (
+		roundTripTimes  []int64
+		processingTimes []int64
+		arrivalTimes    []int64
+	)
 	CheckError(deleteFile(fileName))
 	statisticsFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
@@ -202,6 +237,7 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 			return
 		}
 		pipeSongToMPG(chunk)
+		//play(string(chunk))
 		//_ = chunk
 	}
 }
