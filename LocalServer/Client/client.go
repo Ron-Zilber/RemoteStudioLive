@@ -55,8 +55,8 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	buffer := make([]byte, DataFrameSize)
 	// Send the song to the server (as packets)
 	for {
-		tInit := time.Now().UnixMicro()
-		time.Sleep(100000)
+		tInit := time.Now().UnixMilli()
+		time.Sleep(time.Millisecond)
 		bytesRead, err := file.Read(buffer)
 
 		if err != nil { // When reading EOF
@@ -65,7 +65,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 			packet.SendPacket(conn)
 			break
 		}
-		tProcessing := time.Now().UnixMicro() - tInit
+		tProcessing := time.Now().UnixMilli() - tInit
 		songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
 		songPacket.SetData(buffer)
 		songPacket.SendPacket(conn)
@@ -101,7 +101,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			// Send the packet to the routine that pipelines the packets to mpg123
 			streamChannel <- chunk
 
-			timeStampFinal := time.Now().UnixMicro()
+			timeStampFinal := time.Now().UnixMilli()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
 			statsChannel <- []int64{timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
 
@@ -158,7 +158,7 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 		}
 		arrivalTime, roundTripTime, processingTime := timeMeasures[0], timeMeasures[1], timeMeasures[2]
 		if packetIndex%10 == 0 {
-			fmt.Fprintf(statisticsFile, "Packet %4d | Round Trip Time: %5d microseconds\n", packetIndex, roundTripTime)
+			fmt.Fprintf(statisticsFile, "Packet %4d | Round Trip Time: %5d milliseconds\n", packetIndex, roundTripTime)
 		}
 
 		roundTripTimes = append(roundTripTimes, roundTripTime)
@@ -174,20 +174,20 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 	// Plot graphs and print to statistics file
 	{
 		fmt.Fprint(statisticsFile, "\n") // Add an empty line
-		fmt.Fprintln(statisticsFile, "Average Round Trip Time:        ", meanSendingTime, "microseconds")
-		fmt.Fprintln(statisticsFile, "Round Trip Time Jitter:         ", rttJitter, "microseconds")
-		fmt.Fprintln(statisticsFile, "Average Inter-Arrival Time:     ", meanInterArrivals, "microseconds")
+		fmt.Fprintln(statisticsFile, "Average Round Trip Time:        ", meanSendingTime, "milliseconds")
+		fmt.Fprintln(statisticsFile, "Round Trip Time Jitter:         ", rttJitter, "milliseconds")
+		fmt.Fprintln(statisticsFile, "Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
 		CheckError(plotByteSlice(roundTripTimes,
 			"Packets RTT Plot.png",
-			"Packets RTT [microseconds]",
+			"Packets RTT [milliseconds]",
 			"Packet Index",
-			"Packet RTT [microseconds]"))
+			"Packet RTT [milliseconds]"))
 
 		CheckError(plotByteSlice(interArrivals,
 			"Inter-Arrival Times.png",
-			"Inter-Arrival Times [microseconds]",
+			"Inter-Arrival Times [milliseconds]",
 			"Packet Index",
-			"Inter-Arrival Time [microseconds]"))
+			"Inter-Arrival Time [milliseconds]"))
 	}
 }
 
