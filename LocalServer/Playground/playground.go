@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"time"
@@ -23,26 +24,18 @@ func main() {
 
 	rawData, err := recordRawToBytes(5)
 	CheckError(err)
-	encodeBytesToMp3(rawData, Mp3File)
+	//encodeBytesToMp3(rawData, Mp3File)
+	StreamFileToMPG(rawData)
+	//printFile(Mp3File)
 
-	printFile(Mp3File)
 }
-
-func encodeToMp3(rawFile string, Mp3File string) {
-	fRaw := rawFile
-	fMp3 := Mp3File
-
-	err := ffmpeg.Input(fRaw, ffmpeg.KwArgs{
-		"f":  "s16le",
-		"ar": "44100",
-		"ac": "1",
-	}).Output(fMp3, ffmpeg.KwArgs{
-		"b:a": "192k",
-	}).Run()
-	if err != nil {
-		fmt.Printf("Error encoding to MP3: %v\n", err)
-		return
-	}
+func StreamFileToMPG(chunk []byte) {
+	tempName := time.Now().String() + ".mp3"
+	encodeBytesToMp3(chunk, tempName)
+	cmd := exec.Command("mpg123", " - ", tempName)
+	CheckError(cmd.Start())
+	cmd.Wait()
+	CheckError(os.Remove(tempName)) 
 }
 
 func encodeBytesToMp3(rawData []byte, Mp3File string) {
@@ -54,11 +47,30 @@ func encodeBytesToMp3(rawData []byte, Mp3File string) {
 	CheckError(rawFile.Close())
 	defer os.Remove(rawFile.Name())
 
-	err = ffmpeg.Input(rawFile.Name(), ffmpeg.KwArgs{
+	{
+		err = ffmpeg.Input(rawFile.Name(), ffmpeg.KwArgs{
+			"f":  "s16le",
+			"ar": "44100",
+			"ac": "1",
+		}).Output(Mp3File, ffmpeg.KwArgs{
+			"b:a": "192k",
+		}).Run()
+		if err != nil {
+			fmt.Printf("Error encoding to MP3: %v\n", err)
+			return
+		}
+	}
+}
+
+func encodeToMp3(rawFile string, Mp3File string) {
+	fRaw := rawFile
+	fMp3 := Mp3File
+
+	err := ffmpeg.Input(fRaw, ffmpeg.KwArgs{
 		"f":  "s16le",
 		"ar": "44100",
 		"ac": "1",
-	}).Output(Mp3File, ffmpeg.KwArgs{
+	}).Output(fMp3, ffmpeg.KwArgs{
 		"b:a": "192k",
 	}).Run()
 	if err != nil {
@@ -80,11 +92,12 @@ func deleteFile(fileName string) error {
 	// Check if the file exists
 	if _, err := os.Stat(fileName); err == nil {
 		// File exists, delete it
+
 		err := os.Remove(fileName)
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if !strings.HasSuffix(err.Error(), "no such file or directory") {
 		// Some other error occurred
 		return err
 	}
@@ -102,7 +115,7 @@ func recordRaw(fileName string, duration int64) {
 		CheckError(f.Close())
 	}()
 
-	portaudio.Initialize()
+	portaudio.Initialize() 
 	//time.Sleep(1)
 	defer portaudio.Terminate()
 	in := make([]int16, 64)

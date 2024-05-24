@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-
+	workMode := "song" // TODO: change this approach of choosing between live record or streaming file
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	conn, err := net.Dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
@@ -25,7 +25,7 @@ func main() {
 	{
 		go logRoutine(LogFile, logChannel, &waitGroup)
 		go statsRoutine(StatisticsLog, statsChannel, logChannel, &waitGroup)
-		go streamRoutine(streamChannel, logChannel, &waitGroup)
+		go streamRoutine(streamChannel, logChannel, &waitGroup, workMode)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 	}
 
@@ -42,8 +42,13 @@ func main() {
 		waitGroup.Wait()
 	}()
 
-	sendSong(conn, SongName, endSessionChannel, logChannel)
-	//sendRecord(conn, endSessionChannel, logChannel)
+	switch workMode { // TODO: Change this mechanism to command line argument
+	case "song":
+		sendSong(conn, SongName, endSessionChannel, logChannel)
+	case "record":
+		sendRecord(conn, endSessionChannel, logChannel)
+	}
+
 	logMessage(logChannel, "Exit Code 0")
 }
 
@@ -89,23 +94,21 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 
 func sendRecord(conn net.Conn, endSessionChannel chan string, logChannel chan string) {
 	defer logMessage(logChannel, "sendRecord Done")
-
+	//! TODO: Finish the following for loop (still not working!!)
 	for {
-		//tInit := time.Now().UnixMilli()
+		tInit := time.Now().UnixMilli()
 		//time.Sleep(time.Millisecond)
-		fileName := time.Now().String()
-		record(fileName, 3)
-		recordPacket := Packet{PacketType: PacketRecord}
-		fileNameBytes := []byte(fileName)
-		recordPacket.Data = [1000]byte(fileNameBytes)
+		rawData, _ := recordRawToBytes(5)
+		recordPacket := Packet{PacketType: PacketRequestSong}
+		//recordPacket.Data = [1000]byte(rawData)
 		recordPacket.SendPacket(conn)
-		//tProcessing := time.Now().UnixMilli() - tInit
-		//songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
-		//songPacket.SetData(buffer)
-		//songPacket.SendPacket(conn)
+		tProcessing := time.Now().UnixMilli() - tInit
+		songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, len(rawData))
+		songPacket.SetData(rawData)
+		songPacket.SendPacket(conn)
 
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(20 * time.Second):
 			logMessage(logChannel, "timeout")
 			packet := Packet{PacketType: PacketCloseChannel}
 			packet.SendPacket(conn)
@@ -120,9 +123,11 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 	logMessage(logChannel, "handleResponseRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "handleResponseRoutine Done")
+
 	for {
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
+
 		switch receivePacket.PacketType {
 		case PacketRequestSong:
 			chunk := make([]byte, receivePacket.DataSize)
@@ -130,13 +135,13 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 
 			// Send the packet to the routine that pipelines the packets to mpg123
 			streamChannel <- chunk
-
 			timeStampFinal := time.Now().UnixMilli()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
 			statsChannel <- []int64{timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
 
-		case PacketRecord:
-			streamChannel <- receivePacket.Data[:]
+		// todo: are the following lines necessary?? 	
+		//case PacketRecord:
+		//	streamChannel <- receivePacket.Data[:]
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -226,7 +231,7 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 	}
 }
 
-func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup) {
+func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup, workMode string) {
 	logMessage(logChannel, "streamRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "streamRoutine Done")
@@ -236,8 +241,14 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 			// The channel has been closed
 			return
 		}
-		pipeSongToMPG(chunk)
-		//play(string(chunk))
-		//_ = chunk
+		switch workMode {
+		case "song":
+			pipeSongToMPG(chunk)
+
+		case "record":
+			streamFileToMPG(chunk)
+			//_ = chunk
+
+		}
 	}
 }

@@ -3,17 +3,20 @@ package main
 import (
 	. "RemoteStudioLive/SharedUtils"
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"image/color"
 	"io"
 	"math"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"time"
 
 	"github.com/gordonklaus/portaudio"
+	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"golang.org/x/image/font"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -228,6 +231,7 @@ func record(fileName string, duration int64) {
 		}
 
 	}
+	// TODO: Check whatsapp with this:
 	fmt.Println("Stopping the stream")
 	CheckError(stream.Stop())
 }
@@ -290,8 +294,7 @@ func play(fileName string) {
 		}
 	}
 
-	//assume 44100 sample rate, mono, 32 bit
-
+	// Assume 44100 sample rate, mono, 32 bit
 	portaudio.Initialize()
 	defer portaudio.Terminate()
 	out := make([]int32, 8192)
@@ -317,4 +320,81 @@ func play(fileName string) {
 		default:
 		}
 	}
+}
+
+func encodeBytesToMp3(rawData []byte, Mp3File string) {
+	rawFile, err := os.CreateTemp("", "temp")
+	CheckError(err)
+
+	_, err = rawFile.Write(rawData)
+	CheckError(err)
+	CheckError(rawFile.Close())
+	defer os.Remove(rawFile.Name())
+
+	err = ffmpeg.Input(rawFile.Name(), ffmpeg.KwArgs{
+		"f":  "s16le",
+		"ar": "44100",
+		"ac": "1",
+	}).Output(Mp3File, ffmpeg.KwArgs{
+		"b:a": "192k",
+	}).Run()
+	if err != nil {
+		fmt.Printf("Error encoding to MP3: %v\n", err)
+		return
+	}
+}
+
+func recordRawToBytes(duration int64) ([]byte, error) {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, os.Kill)
+
+	var buf bytes.Buffer
+	portaudio.Initialize()
+	defer portaudio.Terminate()
+	in := make([]int16, 64)
+	stream, err := portaudio.OpenDefaultStream(1, 0, 44100, len(in), in)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	if err := stream.Start(); err != nil {
+		return nil, err
+	}
+	tStart := time.Now().Unix()
+
+loop:
+	for {
+		if err := stream.Read(); err != nil {
+			return nil, err
+		}
+		if err := binary.Write(&buf, binary.LittleEndian, in); err != nil {
+			return nil, err
+		}
+		select {
+		case <-sig:
+			break loop
+
+		default:
+			if time.Now().Unix()-tStart > duration {
+				break loop
+			}
+		}
+	}
+	if err := stream.Stop(); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// StreamFileToMPG writes []bytes to temporary
+// file, streaming the audio and deleting the file
+func streamFileToMPG(chunk []byte) {
+	tempName := time.Now().String() + ".mp3"
+	encodeBytesToMp3(chunk, tempName)
+	cmd := exec.Command("mpg123", " - ", tempName)
+	CheckError(cmd.Start())
+	cmd.Wait()
+	CheckError(os.Remove(tempName))
 }
