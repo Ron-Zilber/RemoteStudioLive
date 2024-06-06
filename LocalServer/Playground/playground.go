@@ -24,7 +24,7 @@ import (
 const (
 	SampleRate = 48000 // SampleRate is the number of bits used to represent a full second of audio sampling
 	Channels   = 2     // Channels - 1 for mono; 2 for stereo
-	FrameSize  = 1920  // FrameSize of 960 gives 20 ms (for 48kHz sampling) which is the Opus recommendation
+	FrameSize  = 960   //1920  // FrameSize of 960 gives 20 ms (for 48kHz sampling) which is the Opus recommendation
 
 	BufferSize = FrameSize * Channels // BufferSize let the buffer hold multiple frames
 )
@@ -65,7 +65,7 @@ func recordAndSend(destinationChannel chan []byte, durationMseconds int, waitGro
 	CheckError(stream.Start())
 
 	for {
-		CheckError(stream.Read())
+		CheckError(stream.Read()) //* Read filling the buffer by recording samples until the buffer is full
 
 		data, err := encoder.Encode(in, FrameSize, BufferSize)
 		CheckError(err)
@@ -94,35 +94,42 @@ func play(channel chan []byte, waitGroup *sync.WaitGroup) {
 	CheckError(err)
 
 	speaker.Init(beep.SampleRate(SampleRate), BufferSize)
+	var buffer [][2]float64
+	streamer := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
+		if len(buffer) == 0 {
+			chunk, ok := <-channel
+			if !ok {
+				// The channel has been closed
+				fmt.Println("Channel Closed")
+				return 0, false
+			}
+			//fmt.Println("Got a chunk of size: ", len(chunk))
+			pcm, err := decoder.Decode(chunk, FrameSize, false)
+			if err != nil {
+				fmt.Println("Error decoding chunk:", err)
+				return 0, false
+			}
 
-	stream := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
-		chunk, ok := <-channel
-		if !ok {
-			// The channel has been closed
-			fmt.Println("Channel Closed")
-			return 0, false
-		}
-		//fmt.Println("Got a chunk of size: ", len(chunk))
-		pcm, err := decoder.Decode(chunk, FrameSize, false)
-		if err != nil {
-			fmt.Println("Error decoding chunk:", err)
-			return 0, false
+			for i := 0; i < len(pcm); i += 2 {
+				buffer = append(buffer, [2]float64{
+					float64(pcm[i]) / 32768.0,
+					float64(pcm[i+1]) / 32768.0,
+				})
+			}
 		}
 
 		for i := range samples {
-			if 2*i+1 < len(pcm) {
-				samples[i][0] = float64(pcm[2*i]) / 32768.0
-				samples[i][1] = float64(pcm[2*i+1]) / 32768.0
-			} else {
-				samples[i][0] = 0
-				samples[i][1] = 0
+			if len(buffer) == 0 {
+				return i, true
 			}
+			samples[i] = buffer[0]
+			buffer = buffer[1:]
 		}
 		return len(samples), true
 	})
 
 	done := make(chan bool)
-	speaker.Play(beep.Seq(stream, beep.Callback(func() {
+	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
 		done <- true
 	})))
 
