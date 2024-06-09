@@ -13,14 +13,21 @@ require (
 	github.com/aws/aws-sdk-go v1.53.9 // indirect
 	github.com/ebitengine/oto/v3 v3.1.0 // indirect
 	github.com/ebitengine/purego v0.7.1 // indirect
+	github.com/ebml-go/ebml v0.0.0-20160925193348-ca8851a10894 // indirect
+	github.com/ebml-go/webm v0.0.0-20221117133942-84fa5245cf70 // indirect
+	github.com/gen2brain/malgo v0.11.22 // indirect
 	github.com/gopxl/beep v1.4.1 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
+	github.com/hraban/opus v0.0.0-20230925203106-0188a62cb302 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12 // indirect
+	github.com/petar/GoLLRB v0.0.0-20130427215148-53be0d36a84c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	golang.org/x/sys v0.12.0 // indirect
+	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302 // indirect
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )
 
 require (

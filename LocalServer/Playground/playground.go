@@ -24,7 +24,7 @@ import (
 const (
 	SampleRate = 48000 // SampleRate is the number of bits used to represent a full second of audio sampling
 	Channels   = 2     // Channels - 1 for mono; 2 for stereo
-	FrameSize  = 960   //1920  // FrameSize of 960 gives 20 ms (for 48kHz sampling) which is the Opus recommendation
+	FrameSize  = 960   // FrameSize of 960 gives 20 ms (for 48kHz sampling) which is the Opus recommendation
 
 	BufferSize = FrameSize * Channels // BufferSize let the buffer hold multiple frames
 )
@@ -52,8 +52,8 @@ func recordAndSend(destinationChannel chan []byte, durationMseconds int, waitGro
 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
-	in := make([]int16, BufferSize) // Each Buffer records 10 milliseconds
 
+	in := make([]int16, BufferSize) // Each Buffer records 10 milliseconds
 	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
 	CheckError(err)
 	defer stream.Close()
