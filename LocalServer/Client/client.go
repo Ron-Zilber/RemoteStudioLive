@@ -19,7 +19,8 @@ import (
 func main() {
 	workMode := "record" // TODO: change this approach of choosing between live record or streaming file
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
-	conn, err := net.Dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
+
+	conn, err := dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
 	defer conn.Close()
 
@@ -57,7 +58,7 @@ func main() {
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
 		//sendRecord(conn, endSessionChannel, logChannel, 10000)
-		recordAndSend(conn, logChannel, endSessionChannel, 30)
+		recordAndSend(conn, logChannel, endSessionChannel, 20)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -88,6 +89,75 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 		songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
 		songPacket.SetData(buffer)
 		songPacket.SendPacket(conn)
+	}
+
+	// Wait until communication is done
+	for {
+		msg := <-endSessionChannel
+		switch msg {
+		case "endSession":
+			logMessage(logChannel, "endSessionChannel got 'endSession' ")
+			return
+
+		default:
+			logMessage(logChannel, "endSessionChannel got an unexpected message")
+		}
+	}
+}
+
+func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int) {
+	logMessage(logChannel, "recordAndSend Start")
+	defer logMessage(logChannel, "recordAndSend Done")
+	// TODO: figure how to close stream channel if needed
+	//close(destinationChannel)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, os.Kill)
+
+	portaudio.Initialize()
+	defer portaudio.Terminate()
+
+	in := make([]int16, AudioBufferSize) // Each Buffer records 10 milliseconds
+	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
+	CheckError(err)
+	defer stream.Close()
+
+	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
+	CheckError(err)
+
+	tInit := time.Now().UnixMilli()
+	CheckError(stream.Start())
+
+	for {
+		//time.Sleep(1* time.Millisecond)
+		tRecordFrame := time.Now().UnixMilli()
+		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
+		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
+		if err != nil {
+			logMessage(logChannel, "recordAndSend error: "+err.Error())
+			break
+		}
+		tProcessing := time.Now().UnixMilli() - tRecordFrame
+		recordPacket := InitPacket(PacketRecord, tRecordFrame, tProcessing, len(data))
+		recordPacket.SetData(data)
+		recordPacket.SendPacket(conn)
+
+		select {
+		case <-sig:
+			CheckError(stream.Stop())
+			packet := Packet{PacketType: PacketCloseChannel}
+			packet.SendPacket(conn)
+			return
+
+		default:
+			if time.Now().UnixMilli()-tInit > int64(durationSeconds)*1000 {
+				logMessage(logChannel, "recordAndPlay Timeout")
+				packet := Packet{PacketType: PacketCloseChannel}
+				packet.SendPacket(conn)
+				CheckError(stream.Stop())
+				return
+			}
+		}
 	}
 
 	// Wait until communication is done
@@ -268,126 +338,4 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 
 		<-done
 	}
-}
-
-func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int) {
-	logMessage(logChannel, "recordAndSend Start")
-	defer logMessage(logChannel, "recordAndSend Done")
-	// TODO: figure how to close stream channel if needed
-	//close(destinationChannel)
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, os.Kill)
-
-	portaudio.Initialize()
-	defer portaudio.Terminate()
-
-	in := make([]int16, AudioBufferSize) // Each Buffer records 10 milliseconds
-	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
-	CheckError(err)
-	defer stream.Close()
-
-	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
-	CheckError(err)
-
-	tInit := time.Now().UnixMilli()
-	CheckError(stream.Start())
-
-	for {
-		time.Sleep(10 * time.Millisecond)
-		tRecordFrame := time.Now().UnixMilli()
-		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
-		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
-		if err != nil {
-			logMessage(logChannel, "recordAndSend error: "+err.Error())
-			break
-		}
-		tProcessing := time.Now().UnixMilli() - tRecordFrame
-		recordPacket := InitPacket(PacketRecord, tRecordFrame, tProcessing, len(data))
-		recordPacket.SetData(data)
-		recordPacket.SendPacket(conn)
-
-		select {
-		case <-sig:
-			CheckError(stream.Stop())
-			packet := Packet{PacketType: PacketCloseChannel}
-			packet.SendPacket(conn)
-			return
-
-		default:
-			if time.Now().UnixMilli()-tInit > int64(durationSeconds)*1000 {
-				logMessage(logChannel, "recordAndPlay Timeout")
-				packet := Packet{PacketType: PacketCloseChannel}
-				packet.SendPacket(conn)
-				CheckError(stream.Stop())
-				return
-			}
-		}
-	}
-
-	// Wait until communication is done
-	for {
-		msg := <-endSessionChannel
-		switch msg {
-		case "endSession":
-			logMessage(logChannel, "endSessionChannel got 'endSession' ")
-			return
-
-		default:
-			logMessage(logChannel, "endSessionChannel got an unexpected message")
-		}
-	}
-
-}
-
-func play(channel chan []byte, waitGroup *sync.WaitGroup) {
-	defer func() {
-		waitGroup.Done()
-		fmt.Println("play Done") // TODO: log to logChannel
-	}()
-
-	decoder, err := gopus.NewDecoder(SampleRate, Channels)
-	CheckError(err)
-
-	speaker.Init(beep.SampleRate(SampleRate), AudioBufferSize)
-	var buffer [][2]float64
-	streamer := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
-		if len(buffer) == 0 {
-			chunk, ok := <-channel
-			if !ok {
-				// The channel has been closed
-				fmt.Println("Channel Closed")
-				return 0, false
-			}
-			//fmt.Println("Got a chunk of size: ", len(chunk))
-			pcm, err := decoder.Decode(chunk, FrameSize, false)
-			if err != nil {
-				fmt.Println("Error decoding chunk:", err)
-				return 0, false
-			}
-
-			for i := 0; i < len(pcm); i += 2 {
-				buffer = append(buffer, [2]float64{
-					float64(pcm[i]) / 32768.0,
-					float64(pcm[i+1]) / 32768.0,
-				})
-			}
-		}
-
-		for i := range samples {
-			if len(buffer) == 0 {
-				return i, true
-			}
-			samples[i] = buffer[0]
-			buffer = buffer[1:]
-		}
-		return len(samples), true
-	})
-
-	done := make(chan bool)
-	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
-		done <- true
-	})))
-
-	<-done
 }

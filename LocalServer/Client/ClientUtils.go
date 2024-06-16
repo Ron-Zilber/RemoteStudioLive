@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -61,6 +62,26 @@ func jitter(values []int64) float64 {
 	}
 	quadDev = quadDev / float64(len(values))
 	return math.Sqrt(quadDev)
+}
+
+func dial(netType string, address string) (net.Conn, error) {
+	var (
+		conn net.Conn
+		err  error
+	)
+	switch netType {
+	case "tcp":
+		conn, err = net.Dial(netType, address)
+	case "udp":
+		fmt.Println("line 80")
+		//parts := strings.Split(address, ":")
+		udpConn, err := net.ResolveUDPAddr("udp", address)
+		CheckError(err)
+
+		conn, err = net.DialUDP("udp", nil, udpConn)
+		return conn, err
+	}
+	return conn, err
 }
 
 // CalculateInterArrival compute the differences between consecutive elements in a byte slice using map and a lambda function

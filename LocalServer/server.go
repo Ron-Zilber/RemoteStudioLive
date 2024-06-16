@@ -16,13 +16,33 @@ type Server struct {
 	connSpecs ConnSpecs
 }
 
-func (server *Server) start() {
+func main() {
+
+	server := &Server{}
 	specs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	server.connSpecs = *specs
+
+	server.start()
+}
+
+func (server *Server) start() {
+	switch server.connSpecs.Type {
+	case "tcp":
+		server.startTCP()
+
+	case "udp":
+		server.startUDP()
+
+	default:
+		fmt.Println("Wrong arguments for server initialization")
+	}
+}
+
+func (server *Server) startTCP() {
 	ln, err := net.Listen(server.connSpecs.Type, ":"+server.connSpecs.Port)
 	CheckError(err)
 	defer ln.Close()
-	fmt.Println("Listening on " + server.connSpecs.IP + ":" + server.connSpecs.Port)
+	fmt.Println("Listening tcp on " + server.connSpecs.IP + ":" + server.connSpecs.Port)
 
 	// Listen for an incoming connection.
 	for {
@@ -35,9 +55,22 @@ func (server *Server) start() {
 	}
 }
 
-func main() {
-	server := &Server{}
-	server.start()
+func (server *Server) startUDP() {
+	ln, err := net.ListenPacket("udp", ":"+server.connSpecs.Port)
+	CheckError(err)
+	defer ln.Close()
+	fmt.Println("Listening udp on " + server.connSpecs.IP + ":" + server.connSpecs.Port)
+
+	for {
+		buffer := make([]byte, bufio.MaxScanTokenSize)
+		bytesRead, address, err := ln.ReadFrom(buffer)
+		CheckError(err)
+		fmt.Println("Received packet from: ", address)
+		go func(b []byte, a net.Addr) {
+			_, err = ln.WriteTo(buffer[:bytesRead], address) // Send chunk back to the client
+			CheckError(err)
+		}(buffer, address)
+	}
 }
 
 func handleConnection(conn net.Conn, opMode string) {
