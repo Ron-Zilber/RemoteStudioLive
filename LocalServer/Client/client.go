@@ -41,7 +41,11 @@ func main() {
 		close(handleResponseChannel)
 		close(statsChannel)
 		close(streamChannel)
-		time.Sleep(4 * time.Minute)
+		if workMode == "song" {
+			time.Sleep(4 * time.Minute)
+		} else {
+			time.Sleep(3 * time.Second)
+		}
 		close(logChannel)
 
 		// Wait for the goroutines to finish
@@ -53,7 +57,7 @@ func main() {
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
 		//sendRecord(conn, endSessionChannel, logChannel, 10000)
-		recordAndSend(conn, logChannel, 15000) //TODO: endSessionChannel ?!
+		recordAndSend(conn, logChannel, endSessionChannel, 30)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -85,8 +89,8 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 		songPacket.SetData(buffer)
 		songPacket.SendPacket(conn)
 	}
-	// Wait until communication is done
 
+	// Wait until communication is done
 	for {
 		msg := <-endSessionChannel
 		switch msg {
@@ -109,20 +113,12 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
 		switch receivePacket.PacketType {
-		case PacketRequestSong:
-			// TODO: In the following instructions - why not just: streamChannel <- receivePacket.Data[]  ???
-			chunk := make([]byte, receivePacket.DataSize)
-			copy(chunk, receivePacket.Data[:])
 
-			// Send the packet to the routine that pipelines the packets to mpg123
-			streamChannel <- chunk // TODO: why not just: streamChannel <- receivePacket.Data[]  ???
+		case PacketRequestSong, PacketRecord:
+			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 			timeStampFinal := time.Now().UnixMilli()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
 			statsChannel <- []int64{timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
-
-		// todo: are the following lines necessary??
-		case PacketRecord:
-			streamChannel <- receivePacket.Data[0:receivePacket.DataSize]
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -274,7 +270,7 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 	}
 }
 
-func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) {
+func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int) {
 	logMessage(logChannel, "recordAndSend Start")
 	defer logMessage(logChannel, "recordAndSend Done")
 	// TODO: figure how to close stream channel if needed
@@ -286,7 +282,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
 
-	in := make([]int16, AudioBufferSize) // Each Buffer records 20 milliseconds
+	in := make([]int16, AudioBufferSize) // Each Buffer records 10 milliseconds
 	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
 	CheckError(err)
 	defer stream.Close()
@@ -298,11 +294,14 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 	CheckError(stream.Start())
 
 	for {
-		time.Sleep(20*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		tRecordFrame := time.Now().UnixMilli()
 		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
 		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
-		CheckError(err)
+		if err != nil {
+			logMessage(logChannel, "recordAndSend error: "+err.Error())
+			break
+		}
 		tProcessing := time.Now().UnixMilli() - tRecordFrame
 		recordPacket := InitPacket(PacketRecord, tRecordFrame, tProcessing, len(data))
 		recordPacket.SetData(data)
@@ -316,12 +315,26 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 			return
 
 		default:
-			if time.Now().UnixMilli()-tInit > int64(durationMseconds) {
+			if time.Now().UnixMilli()-tInit > int64(durationSeconds)*1000 {
+				logMessage(logChannel, "recordAndPlay Timeout")
 				packet := Packet{PacketType: PacketCloseChannel}
 				packet.SendPacket(conn)
 				CheckError(stream.Stop())
 				return
 			}
+		}
+	}
+
+	// Wait until communication is done
+	for {
+		msg := <-endSessionChannel
+		switch msg {
+		case "endSession":
+			logMessage(logChannel, "endSessionChannel got 'endSession' ")
+			return
+
+		default:
+			logMessage(logChannel, "endSessionChannel got an unexpected message")
 		}
 	}
 
