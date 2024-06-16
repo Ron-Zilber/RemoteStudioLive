@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image/color"
-	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -34,21 +33,6 @@ const (
 	FrameSize          = 960                                                           // FrameSize of 960 gives 20 ms (for 48kHz sampling) which is the Opus recommendation
 	AudioBufferSize    = FrameSize * Channels                                          // AudioBufferSize let the buffer hold multiple frames
 )
-
-type readerAtSeeker interface {
-	io.Reader
-	io.ReaderAt
-	io.Seeker
-}
-
-type commonChunk struct {
-	NumChans      int16
-	NumSamples    int32
-	BitsPerSample int16
-	SampleRate    [10]byte
-}
-
-type ID [4]byte
 
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
 	statsChannel := make(chan []int64, BufferSize)
@@ -154,22 +138,6 @@ func plotByteSlice(data []int64, figName string, title string, xLabel string, yL
 
 func logMessage(logChannel chan string, message string) {
 	logChannel <- message
-}
-
-func readChunk(r readerAtSeeker) (id ID, data *io.SectionReader, err error) {
-	_, err = r.Read(id[:])
-	if err != nil {
-		return
-	}
-	var n int32
-	err = binary.Read(r, binary.BigEndian, &n)
-	if err != nil {
-		return
-	}
-	off, _ := r.Seek(0, 1)
-	data = io.NewSectionReader(r, off, int64(n))
-	_, err = r.Seek(int64(n), 1)
-	return
 }
 
 func encodeBytesToMp3(rawData []byte, Mp3File string) {

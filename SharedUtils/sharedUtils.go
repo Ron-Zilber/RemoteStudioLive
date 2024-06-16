@@ -102,3 +102,8 @@ func InitPacket(packetType int, initTime int64, processingTime int64, dataSize i
 func (packet *Packet) SetData(dataBuffer []byte) {
 	copy(packet.Data[:], dataBuffer)
 }
+
+// GetPacketSize returns the size of the packet in bytes
+func (packet *Packet) GetPacketSize() int {
+	return len(packet.Data) + 24 // 24 is the summarized length of all other fields of the packet
+}

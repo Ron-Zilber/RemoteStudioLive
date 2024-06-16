@@ -17,7 +17,6 @@ import (
 	"layeh.com/gopus"
 	//"github.com/hraban/opus"
 	//"github.com/hraban/opus"
-	//ffmpeg "github.com/u2takey/ffmpeg-go"
 	//"gopkg.in/hraban/opus.v2"
 )
 
@@ -37,7 +36,6 @@ func main() {
 	go play(channel, &waitGroup)
 	go recordAndSend(channel, 15000, &waitGroup)
 	defer waitGroup.Wait()
-
 }
 
 func recordAndSend(destinationChannel chan []byte, durationMseconds int, waitGroup *sync.WaitGroup) {
@@ -103,7 +101,6 @@ func play(channel chan []byte, waitGroup *sync.WaitGroup) {
 				fmt.Println("Channel Closed")
 				return 0, false
 			}
-			//fmt.Println("Got a chunk of size: ", len(chunk))
 			pcm, err := decoder.Decode(chunk, FrameSize, false)
 			if err != nil {
 				fmt.Println("Error decoding chunk:", err)

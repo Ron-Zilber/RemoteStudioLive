@@ -16,8 +16,6 @@ import (
 	"layeh.com/gopus"
 )
 
-const ()
-
 func main() {
 	workMode := "record" // TODO: change this approach of choosing between live record or streaming file
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
@@ -124,7 +122,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 
 		// todo: are the following lines necessary??
 		case PacketRecord:
-			streamChannel <- receivePacket.Data[:]
+			streamChannel <- receivePacket.Data[0:receivePacket.DataSize]
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -245,6 +243,7 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 				}
 				pcm, err := decoder.Decode(chunk, FrameSize, false)
 				if err != nil {
+					logMessage(logChannel, "Error in streamRoutine: "+err.Error())
 					return 0, false
 				}
 
@@ -276,7 +275,8 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 }
 
 func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) {
-	defer logMessage(logChannel, "sendSong Done")
+	logMessage(logChannel, "recordAndSend Start")
+	defer logMessage(logChannel, "recordAndSend Done")
 	// TODO: figure how to close stream channel if needed
 	//close(destinationChannel)
 
@@ -285,8 +285,8 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
-	in := make([]int16, AudioBufferSize) // Each Buffer records 20 milliseconds
 
+	in := make([]int16, AudioBufferSize) // Each Buffer records 20 milliseconds
 	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
 	CheckError(err)
 	defer stream.Close()
@@ -298,7 +298,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 	CheckError(stream.Start())
 
 	for {
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(20*time.Millisecond)
 		tRecordFrame := time.Now().UnixMilli()
 		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
 		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
@@ -311,14 +311,20 @@ func recordAndSend(conn net.Conn, logChannel chan string, durationMseconds int) 
 		select {
 		case <-sig:
 			CheckError(stream.Stop())
+			packet := Packet{PacketType: PacketCloseChannel}
+			packet.SendPacket(conn)
 			return
+
 		default:
 			if time.Now().UnixMilli()-tInit > int64(durationMseconds) {
+				packet := Packet{PacketType: PacketCloseChannel}
+				packet.SendPacket(conn)
 				CheckError(stream.Stop())
 				return
 			}
 		}
 	}
+
 }
 
 func play(channel chan []byte, waitGroup *sync.WaitGroup) {
