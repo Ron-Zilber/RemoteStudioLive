@@ -11,7 +11,7 @@ import (
 const (
 	//BufferSize is the size of a buffer
 	BufferSize    = bufio.MaxScanTokenSize / 64 // BufferSize - The size of the packets when transmitting a song
-	DataFrameSize = BufferSize - 24             // DataFrameSize - The max size of the data part in a packet
+	DataFrameSize = BufferSize - 28             // DataFrameSize - The max size of the data part in a packet
 )
 
 // Packet is the definition for a packet in the module
@@ -74,7 +74,6 @@ func (packet *Packet) ReadPacket(conn net.Conn) bool {
 			copy(packet.Data[0:DataFrameSize], buf[28:BufferSize])
 		}
 	}
-
 	return packetRead
 }
 
@@ -83,8 +82,8 @@ func (packet *Packet) SendPacket(conn net.Conn) {
 	buf := make([]byte, BufferSize)
 	binary.LittleEndian.PutUint32(buf[0:], packet.PacketType)
 	binary.LittleEndian.PutUint32(buf[4:], packet.SerialNumber)
-	binary.LittleEndian.PutUint64(buf[8:], uint64(packet.InitTime))
-	binary.LittleEndian.PutUint64(buf[16:], uint64(packet.ProcessingTime))
+	binary.LittleEndian.PutUint64(buf[8:], packet.InitTime)
+	binary.LittleEndian.PutUint64(buf[16:], packet.ProcessingTime)
 	binary.LittleEndian.PutUint32(buf[24:], packet.DataSize)
 	copy(buf[28:BufferSize], packet.Data[0:packet.DataSize])
 	_, err := conn.Write(buf)
