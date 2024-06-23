@@ -1,6 +1,6 @@
 # RemoteStudioLive
 
-RemoteStudioLive is a real-time audio communication application built using Golang. It enables two users to communicate live in a high-fidelity audio conversation with very low latency for musical jam session. The project leverages the Opus codec for audio encoding and decoding, and efficiently uses Go's features like channels and Goroutines.
+RemoteStudioLive is a real-time audio communication application built using Go. It enables two users to communicate live in a high-fidelity audio conversation with very low latency for musical jam session. The project leverages the Opus codec for audio encoding and decoding, and efficiently uses Go's features like channels and Goroutines.
 
 This project is developed as my final project in the Electrical and Computer Engineering BSc program at Ben-Gurion University.
 
