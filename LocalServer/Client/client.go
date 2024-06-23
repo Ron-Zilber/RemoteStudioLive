@@ -3,6 +3,7 @@ package main
 
 import (
 	. "RemoteStudioLive/SharedUtils"
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -58,7 +59,7 @@ func main() {
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
 		//sendRecord(conn, endSessionChannel, logChannel, 10000)
-		recordAndSend(conn, logChannel, endSessionChannel, 20)
+		recordAndSend(conn, logChannel, endSessionChannel, 30)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -204,10 +205,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	logMessage(logChannel, "logRoutine Start")
-	CheckError(deleteFile(fileName))
-	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	CheckError(err)
-	defer logFile.Close()
+	var logBuffer bytes.Buffer
 
 	for {
 		logMessage, ok := <-logChannel
@@ -215,9 +213,15 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 			// The channel has been closed
 			break
 		}
-		fmt.Fprintln(logFile, logMessage)
+		logBuffer.WriteString(logMessage +"\n")
 	}
-	fmt.Fprintf(logFile, "logRoutine Done")
+	CheckError(deleteFile(fileName))
+	// Export results to file
+	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	CheckError(err)
+	defer logFile.Close()
+	logBuffer.WriteString("logRoutine Done\n")
+	fmt.Fprintf(logFile, logBuffer.String())
 }
 
 func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
@@ -229,11 +233,7 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 		processingTimes []int64
 		arrivalTimes    []int64
 	)
-	CheckError(deleteFile(fileName))
-	statisticsFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	CheckError(err)
-	defer statisticsFile.Close()
-
+	var statisticsBuffer bytes.Buffer
 	packetIndex := 0
 	// Listen on the channel
 	for {
@@ -243,16 +243,21 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 			break
 		}
 		arrivalTime, roundTripTime, processingTime := timeMeasures[0], timeMeasures[1], timeMeasures[2]
-		if packetIndex%10 == 0 {
-			fmt.Fprintf(statisticsFile, "Packet %4d | Round Trip Time: %5d milliseconds\n", packetIndex, roundTripTime)
-		}
-
+		infoString := fmt.Sprintf("Packet %4d | Round Trip Time: %5d milliseconds\n", packetIndex, roundTripTime)
+		statisticsBuffer.WriteString(infoString)
 		roundTripTimes = append(roundTripTimes, roundTripTime)
 		processingTimes = append(processingTimes, processingTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
 		packetIndex++
 	}
 
+	CheckError(deleteFile(fileName))
+	// Export results to file
+	statisticsFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	CheckError(err)
+	defer statisticsFile.Close()
+
+	fmt.Fprintf(statisticsFile, statisticsBuffer.String())
 	interArrivals := CalculateInterArrival(arrivalTimes)
 	meanInterArrivals := int(mean(interArrivals))
 	meanSendingTime := int(mean(roundTripTimes))
