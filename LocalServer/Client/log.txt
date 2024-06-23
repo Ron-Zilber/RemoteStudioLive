@@ -1,1 +1,13 @@
+recordAndSend Start
+streamRoutine Start
+statsRoutine Start
+logRoutine Start
+handleResponseRoutine Start
+recordAndPlay Timeout
+handleResponseRoutine got 'endSession' message
 handleResponseRoutine Done
+recordAndSend Done
+Exit Code 0
+streamRoutine Done
+statsRoutine Done
+logRoutine Done
