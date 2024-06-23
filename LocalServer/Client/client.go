@@ -3,11 +3,11 @@ package main
 
 import (
 	. "RemoteStudioLive/SharedUtils"
-	"bytes"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -205,7 +205,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	logMessage(logChannel, "logRoutine Start")
-	var logBuffer bytes.Buffer
+	var logBuffer strings.Builder
 
 	for {
 		logMessage, ok := <-logChannel
@@ -213,7 +213,7 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 			// The channel has been closed
 			break
 		}
-		logBuffer.WriteString(logMessage +"\n")
+		logBuffer.WriteString(logMessage + "\n")
 	}
 	CheckError(deleteFile(fileName))
 	// Export results to file
@@ -233,7 +233,7 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 		processingTimes []int64
 		arrivalTimes    []int64
 	)
-	var statisticsBuffer bytes.Buffer
+	var statisticsBuffer strings.Builder
 	packetIndex := 0
 	// Listen on the channel
 	for {
