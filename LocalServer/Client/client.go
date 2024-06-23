@@ -20,7 +20,6 @@ import (
 func main() {
 	workMode := "record" // TODO: change this approach of choosing between live record or streaming file
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
-
 	conn, err := dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
 	defer conn.Close()
@@ -45,7 +44,7 @@ func main() {
 		close(streamChannel)
 		if workMode == "song" {
 			time.Sleep(4 * time.Minute)
-		} else {
+		} else { // workMode == "record"
 			time.Sleep(3 * time.Second)
 		}
 		close(logChannel)
@@ -58,7 +57,6 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		//sendRecord(conn, endSessionChannel, logChannel, 10000)
 		recordAndSend(conn, logChannel, endSessionChannel, 30)
 	}
 
@@ -111,8 +109,6 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int) {
 	logMessage(logChannel, "recordAndSend Start")
 	defer logMessage(logChannel, "recordAndSend Done")
-	// TODO: figure how to close stream channel if needed
-	//close(destinationChannel)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, os.Kill)
@@ -316,8 +312,9 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 		decoder, err := gopus.NewDecoder(SampleRate, Channels)
 		CheckError(err)
 
-		speaker.Init(beep.SampleRate(SampleRate), AudioBufferSize)
+		CheckError(speaker.Init(beep.SampleRate(SampleRate), AudioBufferSize))
 		var buffer [][2]float64
+		
 		streamer := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
 			if len(buffer) == 0 {
 				chunk, ok := <-streamChannel

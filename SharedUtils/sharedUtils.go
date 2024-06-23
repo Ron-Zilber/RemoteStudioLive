@@ -11,7 +11,8 @@ import (
 const (
 	//BufferSize is the size of a buffer
 	BufferSize    = bufio.MaxScanTokenSize / 64 // BufferSize - The size of the packets when transmitting a song
-	DataFrameSize = BufferSize - 28             // DataFrameSize - The max size of the data part in a packet
+	MetadataSize  = 28                          // MetadataSize - Packet information such as bitrate, audio channels, etc
+	DataFrameSize = BufferSize - MetadataSize   // DataFrameSize - The max size of the data part in a packet
 )
 
 // Packet is the definition for a packet in the module
@@ -104,9 +105,4 @@ func InitPacket(packetType int, serialNumber int, initTime int64, processingTime
 // SetData sets the data for a packet
 func (packet *Packet) SetData(dataBuffer []byte) {
 	copy(packet.Data[:], dataBuffer)
-}
-
-// GetPacketSize returns the size of the packet in bytes
-func (packet *Packet) GetPacketSize() int {
-	return len(packet.Data) + 28 // 28 is the summarized length of all other fields of the packet
 }
