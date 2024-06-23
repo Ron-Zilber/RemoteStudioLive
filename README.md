@@ -50,6 +50,7 @@ To start the application, run the following commands:
 
 ```sh
 ./run_server
+```
 
 The execution will return a string in the form of: Listening udp on: <server ip>:<server port>
 
@@ -58,5 +59,6 @@ The execution will return a string in the form of: Listening udp on: <server ip>
 
 ```sh
 ./run_client <server ip>
+```
 
 
