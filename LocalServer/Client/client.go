@@ -75,6 +75,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 
 	buffer := make([]byte, DataFrameSize)
 	// Send the song to the server (as packets)
+	packetsCounter := 0
 	for {
 		time.Sleep(time.Millisecond)
 		tInit := time.Now().UnixMilli()
@@ -87,9 +88,10 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 			break
 		}
 		tProcessing := time.Now().UnixMilli() - tInit
-		songPacket := InitPacket(PacketRequestSong, tInit, tProcessing, bytesRead)
+		songPacket := InitPacket(PacketRequestSong, packetsCounter, tInit, tProcessing, bytesRead)
 		songPacket.SetData(buffer)
 		songPacket.SendPacket(conn)
+		packetsCounter++
 	}
 
 	// Wait until communication is done
@@ -129,6 +131,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	tInit := time.Now().UnixMilli()
 	CheckError(stream.Start())
 
+	packetsCounter := 0
 	for {
 		//time.Sleep(1* time.Millisecond)
 		tRecordFrame := time.Now().UnixMilli()
@@ -139,7 +142,8 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 			break
 		}
 		tProcessing := time.Now().UnixMilli() - tRecordFrame
-		recordPacket := InitPacket(PacketRecord, tRecordFrame, tProcessing, len(data))
+		recordPacket := InitPacket(PacketRecord, packetsCounter, tRecordFrame, tProcessing, len(data))
+		packetsCounter++
 		recordPacket.SetData(data)
 		recordPacket.SendPacket(conn)
 
@@ -189,7 +193,7 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 			timeStampFinal := time.Now().UnixMilli()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
-			statsChannel <- []int64{timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
+			statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -234,7 +238,6 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 		arrivalTimes    []int64
 	)
 	var statisticsBuffer strings.Builder
-	packetIndex := 0
 	// Listen on the channel
 	for {
 		timeMeasures, ok := <-statsChannel
@@ -242,13 +245,17 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 			// The channel has been closed
 			break
 		}
-		arrivalTime, roundTripTime, processingTime := timeMeasures[0], timeMeasures[1], timeMeasures[2]
-		infoString := fmt.Sprintf("Packet %4d | Round Trip Time: %5d milliseconds\n", packetIndex, roundTripTime)
+		serialNumber, arrivalTime := timeMeasures[0], timeMeasures[1]
+		roundTripTime, processingTime := timeMeasures[2], timeMeasures[3]
+
+		infoString := fmt.Sprintf(
+			"Packet %4d | Round Trip Time: %5d milliseconds\n",
+			serialNumber, roundTripTime)
+
 		statisticsBuffer.WriteString(infoString)
 		roundTripTimes = append(roundTripTimes, roundTripTime)
 		processingTimes = append(processingTimes, processingTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
-		packetIndex++
 	}
 
 	CheckError(deleteFile(fileName))
@@ -265,9 +272,15 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 	// Plot graphs and print to statistics file
 	{
 		fmt.Fprint(statisticsFile, "\n") // Add an empty line
-		fmt.Fprintln(statisticsFile, "Average Round Trip Time:        ", meanSendingTime, "milliseconds")
-		fmt.Fprintln(statisticsFile, "Round Trip Time Jitter:         ", rttJitter, "milliseconds")
-		fmt.Fprintln(statisticsFile, "Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
+
+		fmt.Fprintln(statisticsFile,
+			"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
+		fmt.Fprintln(statisticsFile,
+			"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
+
+		fmt.Fprintln(statisticsFile,
+			"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
+
 		CheckError(plotByteSlice(roundTripTimes,
 			"Packets RTT Plot.png",
 			"Packets RTT [milliseconds]",

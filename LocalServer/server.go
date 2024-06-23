@@ -21,7 +21,6 @@ func main() {
 	server := &Server{}
 	specs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	server.connSpecs = *specs
-
 	server.start()
 }
 

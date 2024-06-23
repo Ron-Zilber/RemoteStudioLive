@@ -73,8 +73,6 @@ func dial(netType string, address string) (net.Conn, error) {
 	case "tcp":
 		conn, err = net.Dial(netType, address)
 	case "udp":
-		fmt.Println("line 80")
-		//parts := strings.Split(address, ":")
 		udpConn, err := net.ResolveUDPAddr("udp", address)
 		CheckError(err)
 
