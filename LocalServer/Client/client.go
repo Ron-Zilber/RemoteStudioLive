@@ -26,12 +26,13 @@ func main() {
 
 	// Create channels parallel sending, receiving, streaming and collecting messages.
 	statsChannel, streamChannel, handleResponseChannel, endSessionChannel, logChannel := initChannels()
-
+	
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(4)
 	{
 		go logRoutine(LogFile, logChannel, &waitGroup)
-		go statsRoutine(StatisticsLog, statsChannel, logChannel, &waitGroup)
+		logFiles := []string{RttLog, InterArrivalLog}
+		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup)
 		go streamRoutine(streamChannel, logChannel, &waitGroup, workMode)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 	}
@@ -57,7 +58,7 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 30)
+		recordAndSend(conn, logChannel, endSessionChannel, 10)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -224,16 +225,20 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 	fmt.Fprintf(logFile, logBuffer.String())
 }
 
-func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
+func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
 	logMessage(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
+	
+	rttFileName := fileNames[0]
+	interArrivalFileName := fileNames[1]
+
 	var (
 		roundTripTimes  []int64
 		processingTimes []int64
 		arrivalTimes    []int64
 	)
-	var statisticsBuffer strings.Builder
+	var roundTripTimeBuffer strings.Builder
 	// Listen on the channel
 	for {
 		timeMeasures, ok := <-statsChannel
@@ -248,43 +253,49 @@ func statsRoutine(fileName string, statsChannel chan []int64, logChannel chan st
 			"Packet %4d | Round Trip Time: %5d milliseconds\n",
 			serialNumber, roundTripTime)
 
-		statisticsBuffer.WriteString(infoString)
+		roundTripTimeBuffer.WriteString(infoString)
 		roundTripTimes = append(roundTripTimes, roundTripTime)
 		processingTimes = append(processingTimes, processingTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
 	}
 
-	CheckError(deleteFile(fileName))
+	CheckError(deleteFile(rttFileName))
 	// Export results to file
-	statisticsFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	roundTripTimeFile, err := os.OpenFile(rttFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	CheckError(err)
-	defer statisticsFile.Close()
+	defer roundTripTimeFile.Close()
 
-	fmt.Fprintf(statisticsFile, statisticsBuffer.String())
+	fmt.Fprintf(roundTripTimeFile, roundTripTimeBuffer.String())
 	interArrivals := CalculateInterArrival(arrivalTimes)
+
+	CheckError(deleteFile(interArrivalFileName))
+	interArrivalFile, err := os.OpenFile(interArrivalFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	defer interArrivalFile.Close()
+	fmt.Fprintln(interArrivalFile, int64sToString(interArrivals))
 	meanInterArrivals := int(mean(interArrivals))
 	meanSendingTime := int(mean(roundTripTimes))
 	rttJitter := int(jitter(roundTripTimes))
 	// Plot graphs and print to statistics file
 	{
-		fmt.Fprint(statisticsFile, "\n") // Add an empty line
+		fmt.Fprint(roundTripTimeFile, "\n") // Add an empty line
 
-		fmt.Fprintln(statisticsFile,
+		fmt.Fprintln(roundTripTimeFile,
 			"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
-		fmt.Fprintln(statisticsFile,
+		
+		fmt.Fprintln(roundTripTimeFile,
 			"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
 
-		fmt.Fprintln(statisticsFile,
+		fmt.Fprintln(roundTripTimeFile,
 			"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
-
+			
 		CheckError(plotByteSlice(roundTripTimes,
-			"Packets RTT Plot.png",
+			"./Plots/Packets RTT Plot.png",
 			"Packets RTT [milliseconds]",
 			"Packet Index",
 			"Packet RTT [milliseconds]"))
 
 		CheckError(plotByteSlice(interArrivals,
-			"Inter-Arrival Times.png",
+			"./Plots/Inter-Arrival Times.png",
 			"Inter-Arrival Times [milliseconds]",
 			"Packet Index",
 			"Inter-Arrival Time [milliseconds]"))

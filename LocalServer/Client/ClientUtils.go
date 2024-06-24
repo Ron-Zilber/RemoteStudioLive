@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gordonklaus/portaudio"
@@ -23,7 +25,8 @@ import (
 )
 
 const (
-	StatisticsLog      = "StatisticsLog.txt"                                           // StatisticsLog - The file that logs the time measurements
+	RttLog             = "./Stats/StatisticsLog.txt"                                   // StatisticsLog - The file that logs the time measurements
+	InterArrivalLog    = "./Stats/interArrivalLog.txt"                                 // InterArrivalLog - The file that logs the inter-arrivals
 	LogFile            = "log.txt"                                                     // LogFile - The file that is used for print and debug
 	SongName           = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
 	PacketRequestSong  = iota                                                          // PacketRequestSong - .
@@ -235,4 +238,12 @@ func streamFileToMPG(chunk []byte) {
 	cmd.Wait()
 	CheckError(os.Remove(tempName))
 	//fmt.Println("streamFileToMPG done")
+}
+
+func int64sToString(list []int64) string {
+	var s strings.Builder
+	for _, num := range list {
+		s.WriteString(strconv.Itoa(int(num)) + "\n")
+	}
+	return s.String()
 }

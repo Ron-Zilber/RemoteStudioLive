@@ -10,3 +10,4 @@ ip_address="$1"
 
 # Run the Go program with specified IP address and 'song' argument
 go run ClientUtils.go client.go udp "$ip_address" 7777 song #| mpg123 -
+python3 ./PlotGenerator.py ./Stats/StatisticsLog.txt ./Stats/interArrivalLog.txt
