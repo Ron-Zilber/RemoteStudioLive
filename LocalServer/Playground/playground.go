@@ -29,23 +29,13 @@ const (
 )
 
 func main() {
-	/*
-		channel := make(chan []byte, 1000)
-		var waitGroup sync.WaitGroup
-		waitGroup.Add(2)
 
-		go play(channel, &waitGroup)
-		go recordAndSend(channel, 15000, &waitGroup)
-		defer waitGroup.Wait()
-	*/
-
-	//var b bytes.Buffer
-	//var str string
-	a := 125
-	c := "ron"
-	newString := fmt.Sprintf("Hi, I'm %s and I'm %d", c, a)
-	fmt.Println(newString)
+	s:= []string{"1", "2", "3", "4", "5"}
+	new_s := strings.Join(s[:], "\n")
+	fmt.Print(new_s)
 }
+
+
 
 func recordAndSend(destinationChannel chan []byte, durationMseconds int, waitGroup *sync.WaitGroup) {
 	defer func() {

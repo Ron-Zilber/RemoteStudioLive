@@ -1,8 +1,8 @@
 recordAndSend Start
-streamRoutine Start
 statsRoutine Start
-logRoutine Start
 handleResponseRoutine Start
+streamRoutine Start
+logRoutine Start
 recordAndPlay Timeout
 handleResponseRoutine got 'endSession' message
 handleResponseRoutine Done
