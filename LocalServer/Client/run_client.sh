@@ -1,13 +1,17 @@
 #!/bin/bash
-# Check if IP address argument is provided
+
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <ip_address>"
     exit 1
 fi
 
-# Assign IP address argument to a variable
 ip_address="$1"
+op_mode="record"
 
-# Run the Go program with specified IP address and 'song' argument
-go run ClientUtils.go client.go udp "$ip_address" 7777 song #| mpg123 -
+if [ $op_mode == "record" ]; then
+    go run ClientUtils.go client.go udp "$ip_address" 7777 $op_mode "$@" 2>&1 | grep -v -E "ALSA lib|opus|silk|HarmShapeGain|~"
+elif [ $op_mode == "song" ]; then
+    go run ClientUtils.go client.go udp "$ip_address" 7777 $op_mode 2>/dev/null | mpg123 -
+    fi
+    
 python3 ./PlotGenerator.py ./Stats/StatisticsLog.txt ./Stats/interArrivalLog.txt

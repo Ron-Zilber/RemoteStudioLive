@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-	workMode := "record" // TODO: change this approach of choosing between live record or streaming file
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
 	conn, err := dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
@@ -26,14 +25,14 @@ func main() {
 
 	// Create channels parallel sending, receiving, streaming and collecting messages.
 	statsChannel, streamChannel, handleResponseChannel, endSessionChannel, logChannel := initChannels()
-	
+
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(4)
 	{
 		go logRoutine(LogFile, logChannel, &waitGroup)
 		logFiles := []string{RttLog, InterArrivalLog}
 		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup)
-		go streamRoutine(streamChannel, logChannel, &waitGroup, workMode)
+		go streamRoutine(streamChannel, logChannel, &waitGroup, connSpecs.OpMode)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 	}
 
@@ -43,9 +42,9 @@ func main() {
 		close(handleResponseChannel)
 		close(statsChannel)
 		close(streamChannel)
-		if workMode == "song" {
+		if connSpecs.OpMode == "song" {
 			time.Sleep(4 * time.Minute)
-		} else { // workMode == "record"
+		} else { // OpMode == "record"
 			time.Sleep(3 * time.Second)
 		}
 		close(logChannel)
@@ -54,7 +53,7 @@ func main() {
 		waitGroup.Wait()
 	}()
 
-	switch workMode { // TODO: Change this mechanism to command line argument
+	switch connSpecs.OpMode {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
@@ -129,6 +128,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	CheckError(stream.Start())
 
 	packetsCounter := 0
+	fmt.Println("Record start")
 	for {
 		//time.Sleep(1* time.Millisecond)
 		tRecordFrame := time.Now().UnixMilli()
@@ -153,6 +153,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 
 		default:
 			if time.Now().UnixMilli()-tInit > int64(durationSeconds)*1000 {
+				fmt.Println("Record end")
 				logMessage(logChannel, "recordAndPlay Timeout")
 				packet := Packet{PacketType: PacketCloseChannel}
 				packet.SendPacket(conn)
@@ -229,7 +230,7 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	logMessage(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
-	
+
 	rttFileName := fileNames[0]
 	interArrivalFileName := fileNames[1]
 
@@ -281,13 +282,13 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 
 		fmt.Fprintln(roundTripTimeFile,
 			"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
-		
+
 		fmt.Fprintln(roundTripTimeFile,
 			"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
 
 		fmt.Fprintln(roundTripTimeFile,
 			"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
-			
+
 		CheckError(plotByteSlice(roundTripTimes,
 			"./Plots/Packets RTT Plot.png",
 			"Packets RTT [milliseconds]",
@@ -325,7 +326,7 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 
 		CheckError(speaker.Init(beep.SampleRate(SampleRate), AudioBufferSize))
 		var buffer [][2]float64
-		
+
 		streamer := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
 			if len(buffer) == 0 {
 				chunk, ok := <-streamChannel

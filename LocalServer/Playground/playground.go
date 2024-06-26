@@ -30,12 +30,16 @@ const (
 
 func main() {
 
-	s:= []string{"1", "2", "3", "4", "5"}
-	new_s := strings.Join(s[:], "\n")
-	fmt.Print(new_s)
+	// Clears the screen
+	fmt.Print("Record starts in:\n3")
+	//fmt.Print("3")
+	time.Sleep(time.Second)
+	fmt.Print("\r2")
+	time.Sleep(time.Second)
+	fmt.Print("\r1")
+	time.Sleep(time.Second)
+	fmt.Println("\rStart playing")
 }
-
-
 
 func recordAndSend(destinationChannel chan []byte, durationMseconds int, waitGroup *sync.WaitGroup) {
 	defer func() {
