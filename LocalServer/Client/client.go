@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gopxl/beep"
@@ -57,7 +58,7 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 10)
+		recordAndSend(conn, logChannel, endSessionChannel, 30)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -111,7 +112,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	defer logMessage(logChannel, "recordAndSend Done")
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, os.Kill)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
@@ -188,10 +189,12 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 		switch receivePacket.PacketType {
 
 		case PacketRequestSong, PacketRecord:
-			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 			timeStampFinal := time.Now().UnixMilli()
-			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) - int64(receivePacket.ProcessingTime)
-			statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
+			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) // - int64(receivePacket.ProcessingTime) //TODO: Should RTT include processing time ???
+			if roundTripTime > 5 {
+				statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
+			}
+			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 
 		case PacketCloseChannel:
 			endSessionChannel <- "endSession"
@@ -223,7 +226,7 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 	CheckError(err)
 	defer logFile.Close()
 	logBuffer.WriteString("logRoutine Done\n")
-	fmt.Fprintf(logFile, logBuffer.String())
+	fmt.Fprint(logFile, logBuffer.String())
 }
 
 func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
@@ -266,11 +269,12 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	CheckError(err)
 	defer roundTripTimeFile.Close()
 
-	fmt.Fprintf(roundTripTimeFile, roundTripTimeBuffer.String())
+	fmt.Fprint(roundTripTimeFile, roundTripTimeBuffer.String())
 	interArrivals := CalculateInterArrival(arrivalTimes)
 
 	CheckError(deleteFile(interArrivalFileName))
 	interArrivalFile, err := os.OpenFile(interArrivalFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	CheckError(err)
 	defer interArrivalFile.Close()
 	fmt.Fprintln(interArrivalFile, int64sToString(interArrivals))
 	meanInterArrivals := int(mean(interArrivals))

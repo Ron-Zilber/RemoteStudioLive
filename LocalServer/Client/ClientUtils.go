@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gordonklaus/portaudio"
@@ -186,7 +187,7 @@ func encodeBytesToMp3(rawData []byte, Mp3File string) {
 
 func recordRawToBytes(milliSeconds int64) ([]byte, error) {
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, os.Kill)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	var buf bytes.Buffer
 	portaudio.Initialize()

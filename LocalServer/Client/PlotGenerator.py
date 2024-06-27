@@ -53,9 +53,9 @@ def parse_stats_file(stats_file_name, type):
     return result
   
 def plot_histogram(packet_values, title, xlabel, file_name):
-
+  plt.figure(figsize=(10, 6))
   # Plotting a basic histogram
-  plt.hist(packet_values, bins=30, color='skyblue', edgecolor='black')
+  x, bins, p = plt.hist(packet_values, bins=30, color='skyblue', edgecolor='black')
   
   # Add x, y gridlines 
   plt.grid(visible = True, color ='grey', 
@@ -66,10 +66,23 @@ def plot_histogram(packet_values, title, xlabel, file_name):
   plt.xlabel(xlabel)
   plt.ylabel('Frequency [packets]')
   plt.title(title)
-  # Show plot
-  plt.savefig(file_name)
-  #plt.show()
+  
 
+  # Normalize to percentage
+  sum = 0
+  for item in p: 
+    sum += int(item.get_height())
+  
+  for item in p:
+    item.set_height(100 * item.get_height() / sum)   
+
+
+  plt.ylim(0, 100)
+  plt.xlim(0, 100)
+
+  #plt.plot()
+  plt.savefig(file_name, dpi=300)
+  
   return
 
 
