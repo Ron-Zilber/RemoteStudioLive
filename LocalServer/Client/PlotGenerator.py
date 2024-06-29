@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colors
 from matplotlib.ticker import PercentFormatter
+import numpy as np
 
 
 def check_input_file():
@@ -52,19 +53,23 @@ def parse_stats_file(stats_file_name, type):
     statsFile.close()
     return result
   
-def plot_histogram(packet_values, title, xlabel, file_name):
+def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str) -> None:
+  normalized_values = np.copy(packet_values)
   plt.figure(figsize=(10, 6))
   # Plotting a basic histogram
-  x, bins, p = plt.hist(packet_values, bins=30, color='skyblue', edgecolor='black')
-  
+  for i in range(len(normalized_values)):
+    normalized_values[i] /= 1000
+
+  x, bins, p = plt.hist(normalized_values, bins=60, color='skyblue', edgecolor='black')
+
   # Add x, y gridlines 
   plt.grid(visible = True, color ='grey', 
         linestyle ='-.', linewidth = 0.5, 
         alpha = 0.6) 
 
   # Adding labels and title
-  plt.xlabel(xlabel)
-  plt.ylabel('Frequency [packets]')
+  plt.xlabel(x_label)
+  plt.ylabel('Percentage [%]')
   plt.title(title)
   
 
@@ -78,24 +83,49 @@ def plot_histogram(packet_values, title, xlabel, file_name):
 
 
   plt.ylim(0, 100)
-  plt.xlim(0, 100)
+  #plt.xlim(0, 100)
 
   #plt.plot()
   plt.savefig(file_name, dpi=300)
   
-  return
 
+def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file_name: str) -> None:
+  normalized_values = np.copy(packet_values)
+
+  for i in range(len(normalized_values)):
+    normalized_values[i] /= 1000
+
+  plt.figure(figsize=(10, 6))
+
+
+  p = plt.plot(range(len(normalized_values)), normalized_values, color='skyblue')
+
+  # Add x, y gridlines 
+  plt.grid(visible = True, color ='grey', 
+        linestyle ='-.', linewidth = 0.5, 
+        alpha = 0.6) 
+
+  # Adding labels and title
+  plt.xlabel(x_label)
+  plt.ylabel(y_label)
+  plt.title(title)
+  
+  #plt.show()
+  plt.savefig(file_name, dpi=300)
+  
+  return  
 
 if __name__=="__main__":
-
+  
   rtt_file_name, inter_arrival_file_name = check_input_file()
   packets = parse_stats_file(rtt_file_name, "rtt")
-  
   packet_indexes = [packets[i][0] for i in range(len(packets))]
   packet_RTTs = [packets[i][1] for i in range(len(packets))]
+
   inter_arrivals = parse_stats_file(inter_arrival_file_name, "interArrival")
 
-
+  plot_graph(packet_RTTs, "Packets Round Trip Time", "Packet Index", "RTT [milliseconds]", "./Plots/test")
+  
   plot_histogram(packet_RTTs, 'Packets Round Trip Time (RTT)',
                  'RTT [milliseconds]', "./Plots/Packet RTTs")
   

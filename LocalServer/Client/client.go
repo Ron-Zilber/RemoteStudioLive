@@ -58,7 +58,7 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 30)
+		recordAndSend(conn, logChannel, endSessionChannel, 20)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -76,7 +76,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	// Send the song to the server (as packets)
 	packetsCounter := 0
 	for {
-		time.Sleep(time.Millisecond)
+		//time.Sleep(time.Millisecond)
 		tInit := time.Now().UnixMilli()
 		bytesRead, err := file.Read(buffer)
 
@@ -125,21 +125,21 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
 	CheckError(err)
 
-	tInit := time.Now().UnixMilli()
+	tInit := time.Now().UnixMicro()
 	CheckError(stream.Start())
 
 	packetsCounter := 0
 	fmt.Println("Record start")
 	for {
-		//time.Sleep(1* time.Millisecond)
-		tRecordFrame := time.Now().UnixMilli()
+		//time.Sleep(1* time.Microsecond)
+		tRecordFrame := time.Now().UnixMicro()
 		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
 		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
 		if err != nil {
 			logMessage(logChannel, "recordAndSend error: "+err.Error())
 			break
 		}
-		tProcessing := time.Now().UnixMilli() - tRecordFrame
+		tProcessing := time.Now().UnixMicro() - tRecordFrame
 		recordPacket := InitPacket(PacketRecord, packetsCounter, tRecordFrame, tProcessing, len(data))
 		packetsCounter++
 		recordPacket.SetData(data)
@@ -153,7 +153,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 			return
 
 		default:
-			if time.Now().UnixMilli()-tInit > int64(durationSeconds)*1000 {
+			if time.Now().UnixMicro()-tInit > int64(durationSeconds)*1000000 {
 				fmt.Println("Record end")
 				logMessage(logChannel, "recordAndPlay Timeout")
 				packet := Packet{PacketType: PacketCloseChannel}
@@ -186,14 +186,13 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 	for {
 		var receivePacket Packet
 		receivePacket.ReadPacket(conn)
+
 		switch receivePacket.PacketType {
 
 		case PacketRequestSong, PacketRecord:
-			timeStampFinal := time.Now().UnixMilli()
+			timeStampFinal := time.Now().UnixMicro()
 			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) // - int64(receivePacket.ProcessingTime) //TODO: Should RTT include processing time ???
-			if roundTripTime > 5 {
-				statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
-			}
+			statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
 			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 
 		case PacketCloseChannel:
@@ -238,11 +237,9 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	interArrivalFileName := fileNames[1]
 
 	var (
-		roundTripTimes  []int64
-		processingTimes []int64
-		arrivalTimes    []int64
+		roundTripTimes, processingTimes, arrivalTimes []int64
+		roundTripTimeBuffer                           strings.Builder
 	)
-	var roundTripTimeBuffer strings.Builder
 	// Listen on the channel
 	for {
 		timeMeasures, ok := <-statsChannel
@@ -251,7 +248,7 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 			break
 		}
 		serialNumber, arrivalTime := timeMeasures[0], timeMeasures[1]
-		roundTripTime, processingTime := timeMeasures[2], timeMeasures[3]
+		processingTime, roundTripTime := timeMeasures[2], timeMeasures[3]
 
 		infoString := fmt.Sprintf(
 			"Packet %4d | Round Trip Time: %5d milliseconds\n",
