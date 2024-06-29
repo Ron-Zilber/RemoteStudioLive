@@ -35,8 +35,6 @@ const (
 	PacketRecord                                                                       // PacketRecord - For recording a stream with microphone
 	SampleRate         = 48000                                                         // SampleRate is the number of bits used to represent a full second of audio sampling
 	Channels           = 2                                                             // Channels - 1 for mono; 2 for stereo
-	FrameSize          = 960                                                           // FrameSize of 960 gives 10 ms (for 48kHz dual-channel sampling) which is the Opus recommendation
-	AudioBufferSize    = FrameSize * Channels                                          // AudioBufferSize let the buffer hold multiple frames
 )
 
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {

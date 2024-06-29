@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,6 +21,8 @@ import (
 
 func main() {
 	connSpecs := InitConnSpecs(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
+	frameSize, _ := strconv.Atoi(os.Args[5])
+
 	conn, err := dial(connSpecs.Type, connSpecs.IP+":"+connSpecs.Port)
 	CheckError(err)
 	defer conn.Close()
@@ -33,7 +36,7 @@ func main() {
 		go logRoutine(LogFile, logChannel, &waitGroup)
 		logFiles := []string{RttLog, InterArrivalLog}
 		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup)
-		go streamRoutine(streamChannel, logChannel, &waitGroup, connSpecs.OpMode)
+		go streamRoutine(streamChannel, logChannel, &waitGroup, connSpecs.OpMode, frameSize)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 	}
 
@@ -58,7 +61,7 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 20)
+		recordAndSend(conn, logChannel, endSessionChannel, 20, frameSize)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -107,7 +110,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	}
 }
 
-func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int) {
+func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int, frameSize int) {
 	logMessage(logChannel, "recordAndSend Start")
 	defer logMessage(logChannel, "recordAndSend Done")
 
@@ -116,8 +119,8 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
-
-	in := make([]int16, AudioBufferSize) // Each Buffer records 10 milliseconds
+	audioBufferSize := frameSize * Channels
+	in := make([]int16, audioBufferSize)
 	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
 	CheckError(err)
 	defer stream.Close()
@@ -134,7 +137,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 		//time.Sleep(1* time.Microsecond)
 		tRecordFrame := time.Now().UnixMicro()
 		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
-		data, err := encoder.Encode(in, FrameSize, AudioBufferSize) //* Encode PCM to Opus
+		data, err := encoder.Encode(in, frameSize, audioBufferSize) //* Encode PCM to Opus
 		if err != nil {
 			logMessage(logChannel, "recordAndSend error: "+err.Error())
 			break
@@ -304,7 +307,7 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	}
 }
 
-func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup, workMode string) {
+func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup, workMode string, frameSize int) {
 	logMessage(logChannel, "streamRoutine Start")
 	defer func() {
 		waitGroup.Done()
@@ -324,8 +327,8 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 	case "record":
 		decoder, err := gopus.NewDecoder(SampleRate, Channels)
 		CheckError(err)
-
-		CheckError(speaker.Init(beep.SampleRate(SampleRate), AudioBufferSize))
+		audioBufferSize := frameSize * Channels
+		CheckError(speaker.Init(beep.SampleRate(SampleRate), audioBufferSize))
 		var buffer [][2]float64
 
 		streamer := beep.StreamerFunc(func(samples [][2]float64) (n int, ok bool) {
@@ -335,7 +338,7 @@ func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup 
 					// The channel has been closed
 					return 0, false
 				}
-				pcm, err := decoder.Decode(chunk, FrameSize, false)
+				pcm, err := decoder.Decode(chunk, frameSize, false)
 				if err != nil {
 					logMessage(logChannel, "Error in streamRoutine: "+err.Error())
 					return 0, false
