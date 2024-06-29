@@ -10,14 +10,16 @@ def check_input_file():
   try:
     rtt_file_name = sys.argv[1]
     inter_arrival_file_name = sys.argv[2]
+    frame_size = sys.argv[3]
   except:
     IndexError
     stats_file_name = None
     inter_arrival_file_name = None
-    print("Usage: python3 ./PlotGenerator <filename1> <filename2>")
+    frame_size = None
+    print("Usage: python3 ./PlotGenerator <filename1> <filename2> <framesize>")
     exit()
 
-  return rtt_file_name, inter_arrival_file_name
+  return rtt_file_name, inter_arrival_file_name, frame_size
 
 def parse_packet(packet_line):
   if len(packet_line) > 1:
@@ -86,7 +88,7 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
   #plt.xlim(0, 100)
 
   #plt.plot()
-  plt.savefig(file_name, dpi=300)
+  plt.savefig(file_name+" "+frame_size, dpi=300)
   
 
 def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file_name: str) -> None:
@@ -111,13 +113,13 @@ def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file
   plt.title(title)
   
   #plt.show()
-  plt.savefig(file_name, dpi=300)
+  plt.savefig(file_name+" "+frame_size, dpi=300)
   
   return  
 
 if __name__=="__main__":
   
-  rtt_file_name, inter_arrival_file_name = check_input_file()
+  rtt_file_name, inter_arrival_file_name, frame_size = check_input_file()
   packets = parse_stats_file(rtt_file_name, "rtt")
   packet_indexes = [packets[i][0] for i in range(len(packets))]
   packet_RTTs = [packets[i][1] for i in range(len(packets))]
