@@ -35,7 +35,7 @@ func main() {
 	{
 		go logRoutine(LogFile, logChannel, &waitGroup)
 		logFiles := []string{RttLog, InterArrivalLog}
-		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup)
+		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup, frameSize)
 		go streamRoutine(streamChannel, logChannel, &waitGroup, connSpecs.OpMode, frameSize)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
 	}
@@ -161,7 +161,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 				packet := Packet{PacketType: PacketCloseChannel}
 				packet.SendPacket(conn)
 				CheckError(stream.Stop())
-				return			
+				return
 			}
 		}
 	}
@@ -221,7 +221,7 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 	fmt.Fprint(logFile, logBuffer.String())
 }
 
-func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup) {
+func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan string, waitGroup *sync.WaitGroup, frameSize int) {
 	logMessage(logChannel, "statsRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
@@ -270,31 +270,41 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	meanInterArrivals := int(mean(interArrivals))
 	meanSendingTime := int(mean(roundTripTimes))
 	rttJitter := int(jitter(roundTripTimes))
+
+	CheckError(updateStats(SummarizedStatsFile, 
+		getAudioLength(frameSize),
+		toMilli(meanSendingTime),
+		toMilli(meanInterArrivals),
+		toMilli(rttJitter)),
+	)
+
 	// Plot graphs and print to statistics file
-	{
-		fmt.Fprint(roundTripTimeFile, "\n") // Add an empty line
+	/*
+		{
+			fmt.Fprint(roundTripTimeFile, "\n") // Add an empty line
 
-		fmt.Fprintln(roundTripTimeFile,
-			"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
+			fmt.Fprintln(roundTripTimeFile,
+				"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
 
-		fmt.Fprintln(roundTripTimeFile,
-			"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
+			fmt.Fprintln(roundTripTimeFile,
+				"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
 
-		fmt.Fprintln(roundTripTimeFile,
-			"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
+			fmt.Fprintln(roundTripTimeFile,
+				"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
 
-		CheckError(plotByteSlice(roundTripTimes,
-			"./Plots/Packets RTT Plot.png",
-			"Packets RTT [milliseconds]",
-			"Packet Index",
-			"Packet RTT [milliseconds]"))
+			CheckError(plotByteSlice(roundTripTimes,
+				"./Plots/Packets RTT Plot.png",
+				"Packets RTT [milliseconds]",
+				"Packet Index",
+				"Packet RTT [milliseconds]"))
 
-		CheckError(plotByteSlice(interArrivals,
-			"./Plots/Inter-Arrival Times.png",
-			"Inter-Arrival Times [milliseconds]",
-			"Packet Index",
-			"Inter-Arrival Time [milliseconds]"))
-	}
+			CheckError(plotByteSlice(interArrivals,
+				"./Plots/Inter-Arrival Times.png",
+				"Inter-Arrival Times [milliseconds]",
+				"Packet Index",
+				"Inter-Arrival Time [milliseconds]"))
+		}
+	*/
 }
 
 func streamRoutine(streamChannel chan []byte, logChannel chan string, waitGroup *sync.WaitGroup, workMode string, frameSize int) {

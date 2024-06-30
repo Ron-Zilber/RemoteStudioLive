@@ -1,0 +1,4 @@
+Frame size:    2 | Average RTT:     5 | Average Inter-Arrival:     5 | Jitter:    4
+Frame size:    5 | Average RTT:    10 | Average Inter-Arrival:     9 | Jitter:    4
+Frame size:   10 | Average RTT:    20 | Average Inter-Arrival:    20 | Jitter:    4
+Frame size:   20 | Average RTT:    40 | Average Inter-Arrival:    40 | Jitter:    4

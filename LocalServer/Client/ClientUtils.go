@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,15 +27,16 @@ import (
 )
 
 const (
-	RttLog             = "./Stats/StatisticsLog.txt"                                   // StatisticsLog - The file that logs the time measurements
-	InterArrivalLog    = "./Stats/interArrivalLog.txt"                                 // InterArrivalLog - The file that logs the inter-arrivals
-	LogFile            = "log.txt"                                                     // LogFile - The file that is used for print and debug
-	SongName           = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
-	PacketRequestSong  = iota                                                          // PacketRequestSong - .
-	PacketCloseChannel                                                                 // PacketCloseChannel - .
-	PacketRecord                                                                       // PacketRecord - For recording a stream with microphone
-	SampleRate         = 48000                                                         // SampleRate is the number of bits used to represent a full second of audio sampling
-	Channels           = 2                                                             // Channels - 1 for mono; 2 for stereo
+	RttLog              = "./Stats/StatisticsLog.txt"                                   // StatisticsLog - The file that logs the time measurements
+	InterArrivalLog     = "./Stats/interArrivalLog.txt"                                 // InterArrivalLog - The file that logs the inter-arrivals
+	LogFile             = "log.txt"                                                     // LogFile - The file that is used for print and debug
+	SummarizedStatsFile = "./Stats/SummarizedStats.txt"                                 // SummarizedStatsFile - Summarizing the RTT, Inter-Arrival and jitter for all frame sizes
+	SongName            = "Eric Clapton - Nobody Knows You When You're Down & Out .mp3" // SongName - The song to send and play
+	PacketRequestSong   = iota                                                          // PacketRequestSong - .
+	PacketCloseChannel                                                                  // PacketCloseChannel - .
+	PacketRecord                                                                        // PacketRecord - For recording a stream with microphone
+	SampleRate          = 48000                                                         // SampleRate is the number of bits used to represent a full second of audio sampling
+	Channels            = 2                                                             // Channels - 1 for mono; 2 for stereo
 )
 
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
@@ -245,4 +247,89 @@ func int64sToString(list []int64) string {
 		s.WriteString(strconv.Itoa(int(num)) + "\n")
 	}
 	return s.String()
+}
+
+// updateStats updates the line in the file with the given frame size or adds a new line if it doesn't exist.
+func updateStats(summarizedStatsFile string, frameSize, RTT, interArrival, jitter int) error {
+	// Open the file in read mode
+	file, err := os.Open(summarizedStatsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File does not exist, create it
+			return createNewFile(summarizedStatsFile, frameSize, RTT, interArrival, jitter)
+		}
+		return err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	found := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, fmt.Sprintf("Frame size: %4d ", frameSize)) {
+			// Update the line with new values
+			newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
+				frameSize, RTT, interArrival, jitter)
+			lines = append(lines, newLine)
+			found = true
+		} else {
+			lines = append(lines, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	if !found {
+		newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
+			frameSize, RTT, interArrival, jitter)
+		lines = append(lines, newLine)
+	}
+
+	sort.Slice(lines, func(i, j int) bool {
+		iSize, _ := strconv.Atoi(strings.Fields(lines[i])[2])
+		jSize, _ := strconv.Atoi(strings.Fields(lines[j])[2])
+		return iSize < jSize
+	})
+
+	file, err = os.OpenFile(summarizedStatsFile, os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for _, line := range lines {
+		if _, err := writer.WriteString(line + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return writer.Flush()
+}
+
+// createNewFile creates a new file with the given frame size and values.
+func createNewFile(summarizedStatsFile string, frameSize, RTT, interArrival, jitter int) error {
+	file, err := os.Create(summarizedStatsFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
+		frameSize, RTT, interArrival, jitter)
+	_, err = file.WriteString(newLine + "\n")
+	return err
+}
+
+func toMilli(num int) int{
+	return num/1000
+}
+
+func getAudioLength(frameSize int) int{
+	channels, sampleRate := 2, 48000
+	secondToMilli := 1000
+	return int((float32(frameSize) /float32(sampleRate*channels) )* float32(secondToMilli))
 }
