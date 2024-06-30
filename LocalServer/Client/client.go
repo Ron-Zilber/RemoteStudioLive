@@ -61,7 +61,7 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 20, frameSize)
+		recordAndSend(conn, logChannel, endSessionChannel, 10, frameSize)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
@@ -121,21 +121,20 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	defer portaudio.Terminate()
 	audioBufferSize := frameSize * Channels
 	in := make([]int16, audioBufferSize)
-	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in), in)
+	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, 1, in)
 	CheckError(err)
 	defer stream.Close()
 
 	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
 	CheckError(err)
-
 	tInit := time.Now().UnixMicro()
 	CheckError(stream.Start())
 
 	packetsCounter := 0
 	fmt.Println("Record start")
 	for {
-		//time.Sleep(1* time.Microsecond)
 		tRecordFrame := time.Now().UnixMicro()
+		//time.Sleep(10*time.Millisecond)
 		CheckError(stream.Read())                                   //* Read filling the buffer by recording samples until the buffer is full
 		data, err := encoder.Encode(in, frameSize, audioBufferSize) //* Encode PCM to Opus
 		if err != nil {
@@ -162,23 +161,14 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 				packet := Packet{PacketType: PacketCloseChannel}
 				packet.SendPacket(conn)
 				CheckError(stream.Stop())
-				return
+				return			
 			}
 		}
 	}
 
 	// Wait until communication is done
-	for {
-		msg := <-endSessionChannel
-		switch msg {
-		case "endSession":
-			logMessage(logChannel, "endSessionChannel got 'endSession' ")
-			return
-
-		default:
-			logMessage(logChannel, "endSessionChannel got an unexpected message")
-		}
-	}
+	<-endSessionChannel
+	logMessage(logChannel, "endSessionChannel got 'endSession' ")
 }
 
 func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {

@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gordonklaus/portaudio"
+	"layeh.com/gopus"
 	//"github.com/hraban/opus"
 	//"github.com/hraban/opus"
 	//"gopkg.in/hraban/opus.v2"
@@ -22,12 +25,44 @@ const (
 )
 
 func main() {
+	frameSize := 480
+	durationSeconds := 3
+	portaudio.Initialize()
+	defer portaudio.Terminate()
+	audioBufferSize := frameSize * Channels
+	_ = audioBufferSize
+	in := make([]int16, audioBufferSize)
+	stream, err := portaudio.OpenDefaultStream(Channels, 0, SampleRate, len(in)/4, in)
+	CheckError(err)
+	defer stream.Close()
 
-	var num1 int64 = time.Now().UnixMicro()
-	
-	var num2 uint64 = uint64(num1)
-	num3 := int64(num2)
-	fmt.Println(num1, "\t",num2, "\t", num3)
+	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
+	CheckError(err)
+	tInit := time.Now().UnixMicro()
+	CheckError(stream.Start())
+
+	packetsCounter := 0
+	fmt.Println("Record start")
+	for {
+		tRecordFrame := time.Now().UnixMicro()
+
+		CheckError(stream.Read())                             //* Read filling the buffer by recording samples until the buffer is full
+		data, err := encoder.Encode(in, frameSize, audioBufferSize) //* Encode PCM to Opus
+		CheckError(err)
+		_ = data
+
+		tProcessing := time.Now().UnixMicro() - tRecordFrame
+
+		fmt.Println("Processing time:", tProcessing)
+		packetsCounter++
+
+		if time.Now().UnixMicro()-tInit > int64(durationSeconds)*1000000 {
+			fmt.Println("Record end")
+			CheckError(stream.Stop())
+			return
+		}
+
+	}
 }
 
 func printFile(fileName string) {
