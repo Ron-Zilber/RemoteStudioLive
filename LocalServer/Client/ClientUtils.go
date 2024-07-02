@@ -68,7 +68,7 @@ func jitter(values []int64) float64 {
 	return math.Sqrt(quadDev)
 }
 
-func dial(netType string, address string) (net.Conn, error) {
+func dial(netType, address string) (net.Conn, error) {
 	var (
 		conn net.Conn
 		err  error
@@ -117,7 +117,7 @@ func pipeSongToMPG(byteSlice []byte) {
 }
 
 // PlotByteSlice plots the values of a byte slice.
-func plotByteSlice(data []int64, figName string, title string, xLabel string, yLabel string) error {
+func plotByteSlice(data []int64, figName, title, xLabel, yLabel string) error {
 	// Create a new plot
 	p := plot.New()
 	// Create a new scatter plotter
@@ -250,13 +250,11 @@ func int64sToString(list []int64) string {
 }
 
 // updateStats updates the line in the file with the given frame size or adds a new line if it doesn't exist.
-func updateStats(summarizedStatsFile string, frameSize, RTT, interArrival, jitter int) error {
-	// Open the file in read mode
+func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, jitter float64) error {
 	file, err := os.Open(summarizedStatsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File does not exist, create it
-			return createNewFile(summarizedStatsFile, frameSize, RTT, interArrival, jitter)
+			createNewFile(summarizedStatsFile)
 		}
 		return err
 	}
@@ -268,8 +266,7 @@ func updateStats(summarizedStatsFile string, frameSize, RTT, interArrival, jitte
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, fmt.Sprintf("Frame size: %4d ", frameSize)) {
-			// Update the line with new values
-			newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
+			newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %8.3f | Average Inter-Arrival: %8.3f | Jitter: %8.3f",
 				frameSize, RTT, interArrival, jitter)
 			lines = append(lines, newLine)
 			found = true
@@ -283,7 +280,7 @@ func updateStats(summarizedStatsFile string, frameSize, RTT, interArrival, jitte
 	}
 
 	if !found {
-		newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
+		newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %8.3f | Average Inter-Arrival: %8.3f | Jitter: %8.3f",
 			frameSize, RTT, interArrival, jitter)
 		lines = append(lines, newLine)
 	}
@@ -311,25 +308,18 @@ func updateStats(summarizedStatsFile string, frameSize, RTT, interArrival, jitte
 }
 
 // createNewFile creates a new file with the given frame size and values.
-func createNewFile(summarizedStatsFile string, frameSize, RTT, interArrival, jitter int) error {
+func createNewFile(summarizedStatsFile string) {
 	file, err := os.Create(summarizedStatsFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %5d | Average Inter-Arrival: %5d | Jitter: %4d",
-		frameSize, RTT, interArrival, jitter)
-	_, err = file.WriteString(newLine + "\n")
-	return err
+	CheckError(err)
+	CheckError(file.Close())
 }
 
-func toMilli(num int) int{
-	return num/1000
+func toMilli(num float64) float64 {
+	return num / 1000
 }
 
-func getAudioLength(frameSize int) int{
+func getAudioLength(frameSize int) int {
 	channels, sampleRate := 2, 48000
 	secondToMilli := 1000
-	return int((float32(frameSize) /float32(sampleRate*channels) )* float32(secondToMilli))
+	return int((float32(frameSize) / float32(sampleRate*channels)) * float32(secondToMilli))
 }

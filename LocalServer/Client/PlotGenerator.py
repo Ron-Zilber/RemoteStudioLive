@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import colors
 from matplotlib.ticker import PercentFormatter
 import numpy as np
+import math
 
 
 def parse_input():
@@ -95,7 +96,7 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
     item.set_height(100 * item.get_height() / sum)   
 
   plt.ylim(0, 100)
-  #plt.xlim(0, 100)
+  plt.xlim(0, 180)
 
   #plt.plot()
   plt.savefig(file_name+" "+frame_size, dpi=300)
@@ -103,7 +104,11 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
 def get_audio_length(frame_size):
   channels, sample_rate = 2, 48000
   second_to_milli = 1000
-  return int((frame_size /(sample_rate*channels) )* second_to_milli)
+
+  result = ((frame_size /(sample_rate*channels) )* second_to_milli)
+  if result.is_integer():
+    return int(result)
+  return result
 
 def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file_name: str) -> None:
   normalized_values = np.copy(packet_values)
@@ -139,8 +144,8 @@ if __name__=="__main__":
 
   inter_arrivals = parse_stats_file(inter_arrival_file_name, "interArrival")
 
-  plot_graph(packet_RTTs, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
-             "Packet Index", "RTT [milliseconds]", "./Plots/Tests/test")
+  #plot_graph(packet_RTTs, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
+  #           "Packet Index", "RTT [milliseconds]", "./Plots/Tests/test")
   
   plot_histogram(
     packet_values=packet_RTTs,

@@ -67,7 +67,7 @@ func main() {
 	logMessage(logChannel, "Exit Code 0")
 }
 
-func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string, logChannel chan string) {
+func sendSong(conn net.Conn, songFileName string, endSessionChannel, logChannel chan string) {
 	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
 	CheckError(err)
 	defer func() {
@@ -110,7 +110,7 @@ func sendSong(conn net.Conn, songFileName string, endSessionChannel chan string,
 	}
 }
 
-func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan string, durationSeconds int, frameSize int) {
+func recordAndSend(conn net.Conn, logChannel, endSessionChannel chan string, durationSeconds, frameSize int) {
 	logMessage(logChannel, "recordAndSend Start")
 	defer logMessage(logChannel, "recordAndSend Done")
 
@@ -171,7 +171,7 @@ func recordAndSend(conn net.Conn, logChannel chan string, endSessionChannel chan
 	logMessage(logChannel, "endSessionChannel got 'endSession' ")
 }
 
-func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel chan string, logChannel chan string, waitGroup *sync.WaitGroup) {
+func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChannel chan []int64, endSessionChannel, logChannel chan string, waitGroup *sync.WaitGroup) {
 	logMessage(logChannel, "handleResponseRoutine Start")
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "handleResponseRoutine Done")
@@ -267,9 +267,9 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	CheckError(err)
 	defer interArrivalFile.Close()
 	fmt.Fprintln(interArrivalFile, int64sToString(interArrivals))
-	meanInterArrivals := int(mean(interArrivals))
-	meanSendingTime := int(mean(roundTripTimes))
-	rttJitter := int(jitter(roundTripTimes))
+	meanInterArrivals := mean(interArrivals)
+	meanSendingTime := mean(roundTripTimes)
+	rttJitter := jitter(roundTripTimes)
 
 	CheckError(updateStats(SummarizedStatsFile, 
 		getAudioLength(frameSize),

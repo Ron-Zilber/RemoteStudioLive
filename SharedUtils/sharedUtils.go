@@ -34,7 +34,7 @@ type ConnSpecs struct {
 }
 
 // InitConnSpecs constructs Connection
-func InitConnSpecs(connType string, connIP string, connPort string, opMode string) *ConnSpecs {
+func InitConnSpecs(connType, connIP, connPort, opMode string) *ConnSpecs {
 	return &ConnSpecs{
 		Type:   connType,
 		IP:     connIP,
@@ -92,7 +92,7 @@ func (packet *Packet) SendPacket(conn net.Conn) {
 }
 
 // InitPacket initializing a packet
-func InitPacket(packetType int, serialNumber int, initTime int64, processingTime int64, dataSize int) *Packet {
+func InitPacket(packetType, serialNumber int, initTime, processingTime int64, dataSize int) *Packet {
 	return &Packet{
 		PacketType:     uint32(packetType),
 		SerialNumber:   uint32(serialNumber),
