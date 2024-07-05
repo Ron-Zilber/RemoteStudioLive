@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	RttLog              = "./Stats/StatisticsLog.txt"                                   // StatisticsLog - The file that logs the time measurements
+	StatisticsLog       = "./Stats/StatisticsLog.txt"                                   // StatisticsLog - The file that logs the time measurements
 	InterArrivalLog     = "./Stats/interArrivalLog.txt"                                 // InterArrivalLog - The file that logs the inter-arrivals
 	LogFile             = "log.txt"                                                     // LogFile - The file that is used for print and debug
 	SummarizedStatsFile = "./Stats/SummarizedStats.txt"                                 // SummarizedStatsFile - Summarizing the RTT, Inter-Arrival and jitter for all frame sizes
@@ -250,24 +250,41 @@ func int64sToString(list []int64) string {
 	return s.String()
 }
 
+func isWhole(num float32) bool {
+	return math.Ceil(float64(num)) == float64(num)
+}
+
 // updateStats updates the line in the file with the given frame size or adds a new line if it doesn't exist.
-func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, jitter float64) error {
-	file, err := os.OpenFile(summarizedStatsFile, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+func updateStats(summarizedStatsFile string, frameSize float32, endToEnd, roundTripTime, interArrival, jitter float64) error {
+	file, err := os.OpenFile(summarizedStatsFile, os.O_CREATE|os.O_RDWR, 0666)
 	CheckError(err)
 	defer file.Close()
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
 	found := false
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, fmt.Sprintf("Frame size: %4d ", frameSize)) {
-			newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %8.3f | Average Inter-Arrival: %8.3f | Jitter: %8.3f",
-				frameSize, RTT, interArrival, jitter)
-			lines = append(lines, newLine)
-			found = true
+		if isWhole(frameSize) {
+			frameSizeInt := int(frameSize)
+			if strings.HasPrefix(line, fmt.Sprintf("Frame size: %4d ", frameSizeInt)) {
+				newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
+					frameSizeInt, endToEnd, roundTripTime, interArrival, jitter)
+				lines = append(lines, newLine)
+				found = true
+			} else {
+				lines = append(lines, line)
+			}
 		} else {
-			lines = append(lines, line)
+			if strings.HasPrefix(line, fmt.Sprintf("Frame size:%5.2f ", frameSize)) {
+				newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
+					frameSize, endToEnd, roundTripTime, interArrival, jitter)
+				lines = append(lines, newLine)
+				found = true
+			} else {
+				lines = append(lines, line)
+			}
 		}
 	}
 
@@ -276,18 +293,25 @@ func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, j
 	}
 
 	if !found {
-		newLine := fmt.Sprintf("Frame size: %4d | Average RTT: %8.3f | Average Inter-Arrival: %8.3f | Jitter: %8.3f",
-			frameSize, RTT, interArrival, jitter)
-		lines = append(lines, newLine)
+		if isWhole(frameSize) {
+			frameSizeInt := int(frameSize)
+			newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
+				frameSizeInt, endToEnd, roundTripTime, interArrival, jitter)
+			lines = append(lines, newLine)
+		} else {
+			newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
+				frameSize, endToEnd, roundTripTime, interArrival, jitter)
+			lines = append(lines, newLine)
+		}
 	}
 
 	sort.Slice(lines, func(i, j int) bool {
-		iSize, _ := strconv.Atoi(strings.Fields(lines[i])[2])
-		jSize, _ := strconv.Atoi(strings.Fields(lines[j])[2])
+		iSize, _ := strconv.ParseFloat(strings.Fields(lines[i])[2], 32)
+		jSize, _ := strconv.ParseFloat(strings.Fields(lines[j])[2], 32)
 		return iSize < jSize
 	})
 
-	file, err = os.OpenFile(summarizedStatsFile, os.O_WRONLY|os.O_TRUNC, 0644)
+	file, err = os.OpenFile(summarizedStatsFile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -303,19 +327,13 @@ func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, j
 	return writer.Flush()
 }
 
-// createNewFile creates a new file with the given frame size and values.
-func createNewFile(fileName string) {
-	file, err := os.Create(fileName)
-	CheckError(err)
-	CheckError(file.Close())
-}
 
 func toMilli(num float64) float64 {
 	return num / 1000
 }
 
-func getAudioLength(frameSize int) int {
+func getAudioLength(frameSize int) float32 {
 	channels, sampleRate := 2, 48000
 	secondToMilli := 1000
-	return int((float32(frameSize) / float32(sampleRate*channels)) * float32(secondToMilli))
+	return (float32(frameSize) / float32(sampleRate*channels)) * float32(secondToMilli)
 }

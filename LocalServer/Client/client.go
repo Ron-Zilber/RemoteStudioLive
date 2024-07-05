@@ -34,7 +34,7 @@ func main() {
 	waitGroup.Add(4)
 	{
 		go logRoutine(LogFile, logChannel, &waitGroup)
-		logFiles := []string{RttLog, InterArrivalLog}
+		logFiles := []string{StatisticsLog, InterArrivalLog}
 		go statsRoutine(logFiles, statsChannel, logChannel, &waitGroup, frameSize)
 		go streamRoutine(streamChannel, logChannel, &waitGroup, connSpecs.OpMode, frameSize)
 		go handleResponseRoutine(conn, streamChannel, statsChannel, endSessionChannel, logChannel, &waitGroup)
@@ -63,12 +63,12 @@ func main() {
 	case "record":
 		recordAndSend(conn, logChannel, endSessionChannel, 10, frameSize)
 	}
-
+	
 	logMessage(logChannel, "Exit Code 0")
 }
 
 func sendSong(conn net.Conn, songFileName string, endSessionChannel, logChannel chan string) {
-	file, err := os.OpenFile(songFileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
+	file, err := os.OpenFile(songFileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	CheckError(err)
 	defer func() {
 		file.Close()
@@ -184,8 +184,13 @@ func handleResponseRoutine(conn net.Conn, streamChannel chan []byte, statsChanne
 
 		case PacketRequestSong, PacketRecord:
 			timeStampFinal := time.Now().UnixMicro()
-			roundTripTime := timeStampFinal - int64(receivePacket.InitTime) // - int64(receivePacket.ProcessingTime) //TODO: Should RTT include processing time ???
-			statsChannel <- []int64{int64(receivePacket.SerialNumber), timeStampFinal, int64(receivePacket.ProcessingTime), roundTripTime}
+			endToEnd := timeStampFinal - int64(receivePacket.InitTime)
+			statsChannel <- []int64{
+				int64(receivePacket.SerialNumber),
+				timeStampFinal,
+				int64(receivePacket.ProcessingTime),
+				endToEnd,
+			}
 			streamChannel <- receivePacket.Data[:receivePacket.DataSize]
 
 		case PacketCloseChannel:
@@ -213,7 +218,7 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 		logBuffer.WriteString(logMessage + "\n")
 	}
 	// Export results to file
-	logFile, err := os.OpenFile(fileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
+	logFile, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	CheckError(err)
 	defer logFile.Close()
 	logBuffer.WriteString("logRoutine Done\n")
@@ -225,12 +230,12 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
 
-	rttFileName := fileNames[0]
+	statisticsFileName := fileNames[0]
 	interArrivalFileName := fileNames[1]
 
 	var (
-		roundTripTimes, processingTimes, arrivalTimes []int64
-		roundTripTimeBuffer                           strings.Builder
+		endToEnds, roundTripTimes, arrivalTimes []int64
+		statisticsBuffer                        strings.Builder
 	)
 	// Listen on the channel
 	for {
@@ -240,36 +245,38 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 			break
 		}
 		serialNumber, arrivalTime := timeMeasures[0], timeMeasures[1]
-		processingTime, roundTripTime := timeMeasures[2], timeMeasures[3]
-
+		processingTime, endToEnd := timeMeasures[2], timeMeasures[3]
+		roundTripTime := endToEnd - processingTime
 		infoString := fmt.Sprintf(
-			"Packet %4d | Round Trip Time: %5d milliseconds\n",
-			serialNumber, roundTripTime)
+			"Packet %4d | End To End: %5d microseconds | Round Trip Time: %4d microseconds\n",
+			serialNumber, endToEnd, roundTripTime)
 
-		roundTripTimeBuffer.WriteString(infoString)
+		statisticsBuffer.WriteString(infoString)
+		endToEnds = append(endToEnds, endToEnd)
 		roundTripTimes = append(roundTripTimes, roundTripTime)
-		processingTimes = append(processingTimes, processingTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
 	}
 	// Export results to file
-	roundTripTimeFile, err := os.OpenFile(rttFileName, os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
+	statisticsFile, err := os.OpenFile(statisticsFileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	CheckError(err)
-	defer roundTripTimeFile.Close()
+	defer statisticsFile.Close()
 
-	fmt.Fprint(roundTripTimeFile, roundTripTimeBuffer.String())
+	fmt.Fprint(statisticsFile, statisticsBuffer.String())
 	interArrivals := CalculateInterArrival(arrivalTimes)
 
-	interArrivalFile, err := os.OpenFile(interArrivalFileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
+	interArrivalFile, err := os.OpenFile(interArrivalFileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	CheckError(err)
 	defer interArrivalFile.Close()
 	fmt.Fprintln(interArrivalFile, int64sToString(interArrivals))
 	meanInterArrivals := mean(interArrivals)
-	meanSendingTime := mean(roundTripTimes)
-	rttJitter := jitter(roundTripTimes)
+	meanEndToEnd := mean(endToEnds)
+	meanRoundTripTime := mean(roundTripTimes)
+	rttJitter := jitter(roundTripTimes) // TODO: Should the jitter be calculated on end to end or rtt?
 
 	CheckError(updateStats(SummarizedStatsFile,
 		getAudioLength(frameSize),
-		toMilli(meanSendingTime),
+		toMilli(meanEndToEnd),
+		toMilli(meanRoundTripTime),
 		toMilli(meanInterArrivals),
 		toMilli(rttJitter)),
 	)
@@ -277,18 +284,18 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	// Plot graphs and print to statistics file
 	/*
 		{
-			fmt.Fprint(roundTripTimeFile, "\n") // Add an empty line
+			fmt.Fprint(statisticsFile, "\n") // Add an empty line
 
-			fmt.Fprintln(roundTripTimeFile,
-				"Average Round Trip Time:        ", meanSendingTime, "milliseconds")
+			fmt.Fprintln(statisticsFile,
+				"Average Round Trip Time:        ", meanEndToEnd, "milliseconds")
 
-			fmt.Fprintln(roundTripTimeFile,
+			fmt.Fprintln(statisticsFile,
 				"Round Trip Time Jitter:         ", rttJitter, "milliseconds")
 
-			fmt.Fprintln(roundTripTimeFile,
+			fmt.Fprintln(statisticsFile,
 				"Average Inter-Arrival Time:     ", meanInterArrivals, "milliseconds")
 
-			CheckError(plotByteSlice(roundTripTimes,
+			CheckError(plotByteSlice(endToEnds,
 				"./Plots/Packets RTT Plot.png",
 				"Packets RTT [milliseconds]",
 				"Packet Index",

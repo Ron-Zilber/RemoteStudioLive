@@ -9,7 +9,7 @@ import math
 
 def parse_input():
   try:
-    rtt_file_name, inter_arrival_file_name  = sys.argv[1], sys.argv[2]
+    time_metrics_file_name, inter_arrival_file_name  = sys.argv[1], sys.argv[2]
     frame_size, setup = sys.argv[3], sys.argv[4]
   except:
     IndexError
@@ -20,18 +20,20 @@ def parse_input():
     print("Usage: python3 ./PlotGenerator <filename1> <filename2> <framesize> <setup>")
     exit()
 
-  return rtt_file_name, inter_arrival_file_name, frame_size, setup
+  return time_metrics_file_name, inter_arrival_file_name, frame_size, setup
 
 def parse_packet(packet_line):
+
   if len(packet_line) > 1:
     splitted_line = packet_line.split()
-    #print("Splitted words are: ", splitted_line)
     packet_index = int(splitted_line[1])
-    packet_RTT = int(splitted_line[6])
-    return packet_index, packet_RTT
+    packet_end_to_end = int(splitted_line[6])
+    packet_rtt = int(splitted_line[12])
+    
+    return packet_index, packet_end_to_end, packet_rtt
   
   else:
-    return None, None
+    return None, None, None
 
 def parse_stats_file(stats_file_name, type):
     statsFile = open(stats_file_name)
@@ -39,13 +41,13 @@ def parse_stats_file(stats_file_name, type):
     result = []
 
     match type:
-      case "rtt":
+      case "metrics":
         for line in statsFile:
-          packet_index, packet_RTT = parse_packet(line)
+          packet_index, packet_end_to_end, packet_rtt = parse_packet(line)
           if packet_index == None:
             break
           else:
-            result.append((packet_index, packet_RTT))
+            result.append((packet_index, packet_end_to_end, packet_rtt))
 
       case "interArrival":
         for num in statsFile:
@@ -137,24 +139,26 @@ def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file
 
 if __name__=="__main__":
   
-  rtt_file_name, inter_arrival_file_name, frame_size, setup = parse_input()
-  packets = parse_stats_file(rtt_file_name, "rtt")
+  time_metrics_file_name, inter_arrival_file_name, frame_size, setup = parse_input()
+  packets = parse_stats_file(time_metrics_file_name, "metrics")
   packet_indexes = [packets[i][0] for i in range(len(packets))]
-  packet_RTTs = [packets[i][1] for i in range(len(packets))]
+  packet_end_to_ends = [packets[i][1] for i in range(len(packets))]
+  packet_RTTs = [packets[i][2] for i in range(len(packets))]
+ 
 
   inter_arrivals = parse_stats_file(inter_arrival_file_name, "interArrival")
 
-  #plot_graph(packet_RTTs, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
+  #plot_graph(packet_end_to_ends, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
   #           "Packet Index", "RTT [milliseconds]", "./Plots/Tests/test")
-  
+   
   plot_histogram(
-    packet_values=packet_RTTs,
-    title='Packets Round Trip Time: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
-    x_label='RTT [milliseconds]',
-    file_name="./Plots/RTTs/Packet RTTs",
-    setup=setup
-    )
-    
+      packet_values=packet_end_to_ends,
+      title='Packets End to End: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
+      x_label='End to End [milliseconds]',
+      file_name="./Plots/End To Ends/Packet End To Ends",
+      setup=setup
+      )
+  
   
   plot_histogram(
     packet_values=inter_arrivals,
@@ -164,8 +168,13 @@ if __name__=="__main__":
     setup=setup
     )
 
-
-
-
-
-
+'''
+  plot_histogram(
+  packet_values=packet_RTTs,
+  title='Packets Round Trip Time: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
+  x_label='RTT [milliseconds]',
+  file_name="./Plots/RTTs/Packet RTTs",
+  setup=setup
+  )
+  '''
+    

@@ -7,7 +7,7 @@ fi
 
 ip_address="$1"
 op_mode="record"
-frame_size=960
+frame_size=480
 setup="lab"
 
 if [ $op_mode == "record" ]; then

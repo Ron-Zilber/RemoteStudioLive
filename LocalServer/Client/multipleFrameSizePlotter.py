@@ -2,22 +2,20 @@ import pandas as pd
 import re
 import matplotlib.pyplot as plt
 import sys
+import os
 
 def parse_line(line):
-    pattern = r"Frame size:\s+(\d+)\s+\|\s+Average RTT:\s+(\d+)\s+\|\s+Average Inter-Arrival:\s+(\d+)\s+\|\s+Jitter:\s+(\d+)"
+    pattern = r"Frame size:\s+([\d.]+)\s+\|\s+Average End to End:\s+([\d.]+)\s+\|\s+Average RTT:\s+([\d.]+)\s+\|\s+Average Inter-Arrival:\s+([\d.]+)\s+\|\s+Jitter:\s+([\d.]+)"
     match = re.match(pattern, line)
     if match:
-        frame_size, rtt, inter_arrival, jitter = match.groups()
+        frame_size, end_to_end, rtt, inter_arrival, jitter = match.groups()
         frame_size = float(frame_size)
-        if frame_size == 2:
-            frame_size = 2.5  # Change the specific frame size to 2.5
-        else:
-            frame_size = int(frame_size)  # Keep all other frame sizes as integers
         return {
             "Frame Size [milliseconds]": frame_size,
-            "RTT [milliseconds]": int(rtt),
-            "Inter-Arrival [milliseconds]": int(inter_arrival),
-            "Jitter [milliseconds]": int(jitter)
+            "End to End [milliseconds]": float(end_to_end),
+            "RTT [milliseconds]": float(rtt),
+            "Jitter [milliseconds]": float(jitter),
+            "Inter-Arrival [milliseconds]": float(inter_arrival)
         }
     return None
 
@@ -32,8 +30,15 @@ def create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summariz
         return
 
     df = pd.DataFrame(data)
+    df = df[[
+        "Frame Size [milliseconds]",
+        "End to End [milliseconds]",
+        "RTT [milliseconds]",
+        "Jitter [milliseconds]",
+        "Inter-Arrival [milliseconds]"
+    ]]
 
-    fig, ax = plt.subplots(figsize=(10, 2))  # Adjust size as needed
+    fig, ax = plt.subplots(figsize=(12, 4))  # Adjust size as needed
     ax.axis('tight')
     ax.axis('off')
     table = ax.table(cellText=df.values, colLabels=df.columns, cellLoc='center', loc='center')
@@ -48,9 +53,10 @@ def create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summariz
         cell_dict[(0, i)].set_text_props(fontweight='bold')
 
     plt.subplots_adjust(top=0.75)
-    plt.suptitle("Summary of RTT, Inter-Arrival, and Jitter Metrics for Various Frame Sizes", fontsize=14)
+    plt.suptitle("End-to-End, RTT, Inter-Arrival, and Jitter Metrics for Various Frame Sizes", fontsize=14)
     plt.title("Setup: " + setupString)
-    #plt.show()
+
+    # Save the plot before showing it
     plt.savefig(output_image, dpi=300)
 
 def parse_input():
@@ -74,6 +80,9 @@ def get_setup(setup):
 
 if __name__ == "__main__":
     setup = parse_input()
-    summarizedStatsFile = "./Stats/SummarizedStats.txt"  
+    summarizedStatsFile = "./Stats/SummarizedStats.txt"
+    
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname("./Plots/Summarized Table.png"), exist_ok=True)
+    
     create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summarized Table.png")
-    print("TODO: ADD SUPPORT FOR 2.5 MSECS WINDOW SIZE")
