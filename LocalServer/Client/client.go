@@ -63,7 +63,7 @@ func main() {
 	case "record":
 		recordAndSend(conn, logChannel, endSessionChannel, 10, frameSize)
 	}
-	
+
 	logMessage(logChannel, "Exit Code 0")
 }
 
@@ -230,8 +230,8 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	defer waitGroup.Done()
 	defer logMessage(logChannel, "statsRoutine Done")
 
-	statisticsFileName := fileNames[0]
-	interArrivalFileName := fileNames[1]
+	statisticsFileName := strings.TrimSuffix(fileNames[0], ".txt") + " " + strconv.Itoa(frameSize) + ".txt"
+	interArrivalFileName := strings.TrimSuffix(fileNames[1], ".txt") + " " + strconv.Itoa(frameSize) + ".txt"
 
 	var (
 		endToEnds, roundTripTimes, arrivalTimes []int64

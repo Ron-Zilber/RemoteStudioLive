@@ -64,7 +64,7 @@ func (server *Server) startUDP() {
 		buffer := make([]byte, bufio.MaxScanTokenSize)
 		bytesRead, address, err := ln.ReadFrom(buffer)
 		CheckError(err)
-		fmt.Println("Received packet from: ", address)
+		//fmt.Println("Received packet from: ", address)
 		go func(b []byte, a net.Addr) {
 			_, err = ln.WriteTo(buffer[:bytesRead], address) // Send chunk back to the client
 			CheckError(err)

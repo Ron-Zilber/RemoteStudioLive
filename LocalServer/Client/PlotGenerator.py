@@ -4,7 +4,6 @@ import numpy as np
 from matplotlib import colors
 from matplotlib.ticker import PercentFormatter
 import numpy as np
-import math
 
 
 def parse_input():
@@ -68,12 +67,13 @@ def get_setup(setup):
     case "home":
       return "Server - lab, client - same city"
     
+def MicroToMilli(nums):
+  return [num/1000 for num in nums]
+
+
 def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str, setup: str) -> None:
-  normalized_values = np.copy(packet_values)
+  normalized_values = MicroToMilli(packet_values)
   plt.figure(figsize=(10, 6))
-  # Plotting a basic histogram
-  for i in range(len(normalized_values)):
-    normalized_values[i] /= 1000
 
   x, bins, p = plt.hist(normalized_values, bins=30, color='skyblue', edgecolor='black')
 
@@ -140,12 +140,14 @@ def plot_graph(packet_values: list, title: str, x_label: str, y_label: str, file
 if __name__=="__main__":
   
   time_metrics_file_name, inter_arrival_file_name, frame_size, setup = parse_input()
+  inter_arrival_file_name = inter_arrival_file_name.removesuffix(".txt")+ " "+str(frame_size)+".txt"
+  time_metrics_file_name = time_metrics_file_name.removesuffix(".txt")+ " "+str(frame_size)+".txt"
+  
   packets = parse_stats_file(time_metrics_file_name, "metrics")
   packet_indexes = [packets[i][0] for i in range(len(packets))]
   packet_end_to_ends = [packets[i][1] for i in range(len(packets))]
   packet_RTTs = [packets[i][2] for i in range(len(packets))]
  
-
   inter_arrivals = parse_stats_file(inter_arrival_file_name, "interArrival")
 
   #plot_graph(packet_end_to_ends, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
