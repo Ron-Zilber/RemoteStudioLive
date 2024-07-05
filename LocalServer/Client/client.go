@@ -47,7 +47,7 @@ func main() {
 		close(statsChannel)
 		close(streamChannel)
 		if connSpecs.OpMode == "song" {
-			time.Sleep(4 * time.Minute)
+			time.Sleep(4 * time.Minute) // Wait until song playing is
 		} else { // OpMode == "record"
 			time.Sleep(3 * time.Second)
 		}
@@ -68,7 +68,7 @@ func main() {
 }
 
 func sendSong(conn net.Conn, songFileName string, endSessionChannel, logChannel chan string) {
-	file, err := os.Open(songFileName) // open the song that the clients wants to send to the server
+	file, err := os.OpenFile(songFileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
 	CheckError(err)
 	defer func() {
 		file.Close()
@@ -155,7 +155,7 @@ func recordAndSend(conn net.Conn, logChannel, endSessionChannel chan string, dur
 			return
 
 		default:
-			if time.Now().UnixMicro()-tInit > int64(durationSeconds)*1000000 {
+			if time.Now().UnixMicro()-tInit > int64(durationSeconds)*MicroToSecond {
 				fmt.Println("Record end")
 				logMessage(logChannel, "recordAndPlay Timeout")
 				packet := Packet{PacketType: PacketCloseChannel}
@@ -212,9 +212,8 @@ func logRoutine(fileName string, logChannel chan string, waitGroup *sync.WaitGro
 		}
 		logBuffer.WriteString(logMessage + "\n")
 	}
-	CheckError(deleteFile(fileName))
 	// Export results to file
-	logFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(fileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
 	CheckError(err)
 	defer logFile.Close()
 	logBuffer.WriteString("logRoutine Done\n")
@@ -252,18 +251,15 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 		processingTimes = append(processingTimes, processingTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
 	}
-
-	CheckError(deleteFile(rttFileName))
 	// Export results to file
-	roundTripTimeFile, err := os.OpenFile(rttFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	roundTripTimeFile, err := os.OpenFile(rttFileName, os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
 	CheckError(err)
 	defer roundTripTimeFile.Close()
 
 	fmt.Fprint(roundTripTimeFile, roundTripTimeBuffer.String())
 	interArrivals := CalculateInterArrival(arrivalTimes)
 
-	CheckError(deleteFile(interArrivalFileName))
-	interArrivalFile, err := os.OpenFile(interArrivalFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	interArrivalFile, err := os.OpenFile(interArrivalFileName,  os.O_CREATE| os.O_RDWR | os.O_TRUNC, 0666)
 	CheckError(err)
 	defer interArrivalFile.Close()
 	fmt.Fprintln(interArrivalFile, int64sToString(interArrivals))
@@ -271,7 +267,7 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	meanSendingTime := mean(roundTripTimes)
 	rttJitter := jitter(roundTripTimes)
 
-	CheckError(updateStats(SummarizedStatsFile, 
+	CheckError(updateStats(SummarizedStatsFile,
 		getAudioLength(frameSize),
 		toMilli(meanSendingTime),
 		toMilli(meanInterArrivals),

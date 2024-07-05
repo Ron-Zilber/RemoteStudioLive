@@ -37,6 +37,7 @@ const (
 	PacketRecord                                                                        // PacketRecord - For recording a stream with microphone
 	SampleRate          = 48000                                                         // SampleRate is the number of bits used to represent a full second of audio sampling
 	Channels            = 2                                                             // Channels - 1 for mono; 2 for stereo
+	MicroToSecond       = 1000000                                                       // MicroToSecond - Unit conversion
 )
 
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
@@ -251,13 +252,8 @@ func int64sToString(list []int64) string {
 
 // updateStats updates the line in the file with the given frame size or adds a new line if it doesn't exist.
 func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, jitter float64) error {
-	file, err := os.Open(summarizedStatsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			createNewFile(summarizedStatsFile)
-		}
-		return err
-	}
+	file, err := os.OpenFile(summarizedStatsFile, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	CheckError(err)
 	defer file.Close()
 
 	var lines []string
@@ -308,8 +304,8 @@ func updateStats(summarizedStatsFile string, frameSize int, RTT, interArrival, j
 }
 
 // createNewFile creates a new file with the given frame size and values.
-func createNewFile(summarizedStatsFile string) {
-	file, err := os.Create(summarizedStatsFile)
+func createNewFile(fileName string) {
+	file, err := os.Create(fileName)
 	CheckError(err)
 	CheckError(file.Close())
 }
