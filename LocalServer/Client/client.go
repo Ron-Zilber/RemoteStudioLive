@@ -50,7 +50,7 @@ func main() {
 		if connSpecs.OpMode == "song" {
 			time.Sleep(4 * time.Minute) // Wait until song playing is
 		} else { // OpMode == "record"
-			time.Sleep(3 * time.Second)
+			time.Sleep(8 * time.Second)
 		}
 		close(logChannel)
 
