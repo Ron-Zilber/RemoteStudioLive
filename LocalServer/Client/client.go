@@ -63,7 +63,7 @@ func main() {
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
 		fmt.Println("Starting session with", getAudioLength(frameSize), "millisecond framesize")
-		recordAndSend(conn, logChannel, endSessionChannel, 20, frameSize)
+		recordAndSend(conn, logChannel, endSessionChannel, 10, frameSize)
 	}
 
 	logMessage(logChannel, "Exit Code 0")

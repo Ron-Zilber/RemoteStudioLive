@@ -83,7 +83,7 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
         alpha = 0.6) 
 
   # Adding labels and title
-  plt.xlabel(x_label, fontsize=16)
+  plt.xlabel(x_label, fontsize=14)
   plt.ylabel('Percentage [%]', fontsize=14)
   plt.suptitle(title, fontsize=18) 
   setup_string = get_setup(setup.strip())
@@ -173,13 +173,3 @@ if __name__=="__main__":
     setup=setup
     )
 
-'''
-  plot_histogram(
-  packet_values=packet_RTTs,
-  title='Packets Round Trip Time: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
-  x_label='RTT [milliseconds]',
-  file_name="./Plots/RTTs/Packet RTTs",
-  setup=setup
-  )
-  '''
-    
