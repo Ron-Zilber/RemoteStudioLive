@@ -5,6 +5,7 @@ import sys
 import os
 import numpy as np
 import seaborn as sns
+from matplotlib.lines import Line2D
 
 def parse_line(line):
     pattern = r"Frame size:\s+([\d.]+)\s+\|\s+Average End to End:\s+([\d.]+)\s+\|\s+Average RTT:\s+([\d.]+)\s+\|\s+Average Inter-Arrival:\s+([\d.]+)\s+\|\s+Jitter:\s+([\d.]+)\s+\|\s+Unordered Packets:\s*([\d.]+)%\s+\|\s+Lost Packets:\s*([\d.]+)%"
@@ -196,11 +197,28 @@ def create_box_plot(data, y_limit, title="Box Plot", x_label="Frame Size", y_lab
                     fontsize=10, 
                     color='red')
 
+        # Calculate and plot the mean
+        mean = np.mean(data[i])
+        ax.plot([i + 0.75, i + 1.25], [mean, mean], linestyle='--', color='blue')
+        ax.annotate(f'{mean:.2f}', 
+                    xy=(i + 1, mean), 
+                    xytext=(0, -15), 
+                    textcoords='offset points', 
+                    ha='center', 
+                    fontsize=10, 
+                    color='blue')
+
+    # Add a legend
+    custom_lines = [
+        Line2D([0], [0], color='red', lw=2, label='Median'),
+        Line2D([0], [0], color='blue', lw=2, linestyle='--', label='Mean')
+    ]
+    ax.legend(handles=custom_lines, loc='upper right')
+
     # Save the plot as an image file
     plt.savefig(output_file, bbox_inches='tight', dpi=300)
     plt.close()
     return
-
 
 def create_summarized_box_plots(data, y_limits, y_labels_list, titles_list,output_files_list):
 
