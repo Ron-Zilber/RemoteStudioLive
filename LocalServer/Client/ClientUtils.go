@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,13 @@ const (
 	MicroToSecond       = 1000000                                                       // MicroToSecond - Unit conversion
 )
 
+type NetworkMetrics struct {
+	frameSize                      float32
+	endToEnd, roundTripTime        float64
+	interArrival, jitter           float64
+	unorderedArrivals, lostPackets float32
+}
+
 func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan string) {
 	statsChannel := make(chan []int64, BufferSize)
 	streamChannel := make(chan []byte, bufio.MaxScanTokenSize)
@@ -51,7 +59,7 @@ func initChannels() (chan []int64, chan []byte, chan []byte, chan string, chan s
 
 // mean calculates the mean value from a slice of int64.
 func mean(values []int64) float64 {
-	sum := int64(0)
+	var sum int64
 	for _, v := range values {
 		sum += v
 	}
@@ -67,6 +75,21 @@ func jitter(values []int64) float64 {
 	}
 	quadDev = quadDev / float64(len(values))
 	return math.Sqrt(quadDev)
+}
+
+func countUnordered(indexesList []int64) int { // TODO: should be counted in pairs or singles?
+	var count int
+	for i, index := range indexesList {
+		if int64(i) != index {
+			count++
+		}
+	}
+	return count
+}
+
+func countLostPackets(indexesList []int64) int {
+	maxItem := slices.Max(indexesList)
+	return int(maxItem+1) - len(indexesList)
 }
 
 func dial(netType, address string) (net.Conn, error) {
@@ -254,8 +277,11 @@ func isWhole(num float32) bool {
 	return math.Ceil(float64(num)) == float64(num)
 }
 
-// updateStats updates the line in the file with the given frame size or adds a new line if it doesn't exist.
-func updateStats(summarizedStatsFile string, frameSize float32, endToEnd, roundTripTime, interArrival, jitter float64) error {
+func getPercentage(num int, outOf int64) float32 {
+	return 100 * (float32(num) / float32(outOf))
+}
+
+func updateStats(summarizedStatsFile string, metrics *NetworkMetrics) error {
 	file, err := os.OpenFile(summarizedStatsFile, os.O_CREATE|os.O_RDWR, 0666)
 	CheckError(err)
 	defer file.Close()
@@ -266,20 +292,20 @@ func updateStats(summarizedStatsFile string, frameSize float32, endToEnd, roundT
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if isWhole(frameSize) {
-			frameSizeInt := int(frameSize)
+		if isWhole(metrics.frameSize) {
+			frameSizeInt := int(metrics.frameSize)
 			if strings.HasPrefix(line, fmt.Sprintf("Frame size: %4d ", frameSizeInt)) {
-				newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
-					frameSizeInt, endToEnd, roundTripTime, interArrival, jitter)
+				newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f | Unordered Packets:%5.2f%% | Lost Packets:%5.2f%%",
+					frameSizeInt, metrics.endToEnd, metrics.roundTripTime, metrics.interArrival, metrics.jitter, metrics.unorderedArrivals, metrics.lostPackets)
 				lines = append(lines, newLine)
 				found = true
 			} else {
 				lines = append(lines, line)
 			}
 		} else {
-			if strings.HasPrefix(line, fmt.Sprintf("Frame size:%5.2f ", frameSize)) {
-				newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
-					frameSize, endToEnd, roundTripTime, interArrival, jitter)
+			if strings.HasPrefix(line, fmt.Sprintf("Frame size:%5.2f ", metrics.frameSize)) {
+				newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f | Unordered Packets:%5.2f%% | Lost Packets:%5.2f%%",
+					metrics.frameSize, metrics.endToEnd, metrics.roundTripTime, metrics.interArrival, metrics.jitter, metrics.unorderedArrivals, metrics.lostPackets)
 				lines = append(lines, newLine)
 				found = true
 			} else {
@@ -293,14 +319,14 @@ func updateStats(summarizedStatsFile string, frameSize float32, endToEnd, roundT
 	}
 
 	if !found {
-		if isWhole(frameSize) {
-			frameSizeInt := int(frameSize)
-			newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
-				frameSizeInt, endToEnd, roundTripTime, interArrival, jitter)
+		if isWhole(metrics.frameSize) {
+			frameSizeInt := int(metrics.frameSize)
+			newLine := fmt.Sprintf("Frame size: %4d | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f | Unordered Packets:%5.2f%% | Lost Packets:%5.2f%%",
+			frameSizeInt, metrics.endToEnd, metrics.roundTripTime, metrics.interArrival, metrics.jitter, metrics.unorderedArrivals, metrics.lostPackets)
 			lines = append(lines, newLine)
 		} else {
-			newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f",
-				frameSize, endToEnd, roundTripTime, interArrival, jitter)
+			newLine := fmt.Sprintf("Frame size:%5.2f | Average End to End:%8.3f | Average RTT:%8.3f | Average Inter-Arrival:%8.3f | Jitter:%8.3f | Unordered Packets:%5.2f%% | Lost Packets:%5.2f%%",
+				metrics.frameSize, metrics.endToEnd, metrics.roundTripTime, metrics.interArrival, metrics.jitter, metrics.unorderedArrivals, metrics.lostPackets)
 			lines = append(lines, newLine)
 		}
 	}

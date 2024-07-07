@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,10 +62,12 @@ func main() {
 	case "song":
 		sendSong(conn, SongName, endSessionChannel, logChannel)
 	case "record":
-		recordAndSend(conn, logChannel, endSessionChannel, 10, frameSize)
+		fmt.Println("Starting session with", getAudioLength(frameSize), "millisecond framesize")
+		recordAndSend(conn, logChannel, endSessionChannel, 20, frameSize)
 	}
 
 	logMessage(logChannel, "Exit Code 0")
+	fmt.Println("")
 }
 
 func sendSong(conn net.Conn, songFileName string, endSessionChannel, logChannel chan string) {
@@ -234,8 +237,8 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	interArrivalFileName := strings.TrimSuffix(fileNames[1], ".txt") + " " + strconv.Itoa(frameSize) + ".txt"
 
 	var (
-		endToEnds, roundTripTimes, arrivalTimes []int64
-		statisticsBuffer                        strings.Builder
+		serialNumbers, endToEnds, roundTripTimes, arrivalTimes []int64
+		statisticsBuffer                                       strings.Builder
 	)
 	// Listen on the channel
 	for {
@@ -252,6 +255,7 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 			serialNumber, endToEnd, roundTripTime)
 
 		statisticsBuffer.WriteString(infoString)
+		serialNumbers = append(serialNumbers, serialNumber)
 		endToEnds = append(endToEnds, endToEnd)
 		roundTripTimes = append(roundTripTimes, roundTripTime)
 		arrivalTimes = append(arrivalTimes, arrivalTime)
@@ -273,13 +277,27 @@ func statsRoutine(fileNames []string, statsChannel chan []int64, logChannel chan
 	meanRoundTripTime := mean(roundTripTimes)
 	rttJitter := jitter(roundTripTimes) // TODO: Should the jitter be calculated on end to end or rtt?
 
-	CheckError(updateStats(SummarizedStatsFile,
-		getAudioLength(frameSize),
-		toMilli(meanEndToEnd),
-		toMilli(meanRoundTripTime),
-		toMilli(meanInterArrivals),
-		toMilli(rttJitter)),
-	)
+	unordered := countUnordered(serialNumbers)
+	lostPackets := countLostPackets(serialNumbers)
+	sentPackets := slices.Max(serialNumbers) + 1
+
+	unorderedPercentage := getPercentage(int(unordered), sentPackets)
+	lostPacketsPercentage := getPercentage(lostPackets, sentPackets)
+
+	//fmt.Println("Unordered packets:", unordered, " Out of", sentPackets, " Packets", unorderedPercentage, "%")
+	//fmt.Println("Lost packets:", lostPackets, " Out of", sentPackets, " Packets", lostPacketsPercentage, "%")
+
+	metrics := NetworkMetrics{
+		frameSize:         getAudioLength(frameSize),
+		endToEnd:          toMilli(meanEndToEnd),
+		roundTripTime:     toMilli(meanRoundTripTime),
+		interArrival:      toMilli(meanInterArrivals),
+		jitter:            toMilli(rttJitter),
+		unorderedArrivals: unorderedPercentage,
+		lostPackets:       lostPacketsPercentage,
+	}
+
+	CheckError(updateStats(SummarizedStatsFile, &metrics))
 
 	// Plot graphs and print to statistics file
 	/*

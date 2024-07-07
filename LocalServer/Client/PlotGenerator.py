@@ -95,10 +95,13 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
     sum += int(item.get_height())
   
   for item in p:
-    item.set_height(100 * item.get_height() / sum)   
+    item.set_height(100 * item.get_height() / sum) 
+  
+  mean = np.mean(normalized_values)
+  plt.axvline(mean, color='red', linestyle='dashed', linewidth=1)
 
   plt.ylim(0, 100)
-  plt.xlim(0, 180)
+  plt.xlim(0, 120)
 
   #plt.plot()
   plt.savefig(file_name+" "+frame_size, dpi=300)
