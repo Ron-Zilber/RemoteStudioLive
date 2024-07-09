@@ -7,7 +7,6 @@ from matplotlib.lines import Line2D
 import numpy as np
 import seaborn as sns
 
-
 def parse_input():
   try:
     time_metrics_file_name, inter_arrival_file_name  = sys.argv[1], sys.argv[2]
@@ -71,7 +70,6 @@ def get_setup(setup):
     
 def MicroToMilli(nums):
   return [num/1000.0 for num in nums]
-
 
 def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str, setup: str) -> None:
   sns.set_theme(style="darkgrid")  

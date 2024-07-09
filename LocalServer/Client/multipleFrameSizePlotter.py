@@ -1,8 +1,6 @@
 import pandas as pd
-import re
 import matplotlib.pyplot as plt
-import sys
-import os
+import sys, os, re, PlotGenerator
 import numpy as np
 import seaborn as sns
 from matplotlib.lines import Line2D
@@ -29,7 +27,7 @@ def load_data():
 
         summarized_end_to_ends.append(packet_end_to_ends)
         summarized_RTTs.append(packet_RTTs)
-        summarized_inter_arrivals.append(MicroToMilli(inter_arrivals))
+        summarized_inter_arrivals.append(PlotGenerator.MicroToMilli(inter_arrivals))
 
     return summarized_end_to_ends, summarized_RTTs, summarized_inter_arrivals
 
@@ -73,19 +71,6 @@ def parse_input():
         print("Usage: python3 ./multipleFrameSizePlotter.py <setup>")
         exit()
 
-def parse_packet(packet_line):
-
-  if len(packet_line) > 1:
-    splitted_line = packet_line.split()
-    packet_index = int(splitted_line[1])
-    packet_end_to_end = int(splitted_line[6])
-    packet_rtt = int(splitted_line[12])
-    
-    return packet_index, packet_end_to_end, packet_rtt
-  
-  else:
-    return None, None, None
-
 def parse_stats_file(stats_file_name, type):
     statsFile = open(stats_file_name)
 
@@ -94,7 +79,7 @@ def parse_stats_file(stats_file_name, type):
     match type:
       case "metrics":
         for line in statsFile:
-          packet_index, packet_end_to_end, packet_rtt = parse_packet(line)
+          packet_index, packet_end_to_end, packet_rtt = PlotGenerator.parse_packet(line)
           if packet_index == None:
             break
           else:
@@ -116,22 +101,8 @@ def bins_to_percentage(p):
    for item in p:
       item.set_height(100 * item.get_height() / sum)
 
-def get_setup(setup):
-    match setup:
-        case "lab":
-            return "Server - lab, client - lab"
-        case "aroma":
-            return "Server - lab , client - Aroma"
-        case "home":
-            return "Server - lab, client - same city"
-        case _:
-            return "Unknown setup"
-
-def MicroToMilli(nums):
-  return [num/1000 for num in nums]
-
 def create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summarized Table.png"):
-    setupString = get_setup(setup.strip())
+    setupString = PlotGenerator.get_setup(setup.strip())
     data = parse_data(summarizedStatsFile)
 
     df = pd.DataFrame(data)
@@ -250,9 +221,9 @@ def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r
         rtts = [packets[i][2] for i in range(len(packets))]
         inter_arrivals = parse_stats_file(inter_arrival_files[i], "interArrival")
 
-        summarized_end_to_ends.append(MicroToMilli(end_to_ends))
-        summarized_RTTs.append(MicroToMilli(rtts))
-        summarized_inter_arrivals.append(MicroToMilli(inter_arrivals))
+        summarized_end_to_ends.append(PlotGenerator.MicroToMilli(end_to_ends))
+        summarized_RTTs.append(PlotGenerator.MicroToMilli(rtts))
+        summarized_inter_arrivals.append(PlotGenerator.MicroToMilli(inter_arrivals))
         summarized_metrics = [summarized_end_to_ends, summarized_RTTs, summarized_inter_arrivals]
         
     colors = ['skyblue', 'orange', 'green', 'red', 'purple']
@@ -280,7 +251,7 @@ def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r
         plt.ylabel("Percentage [%]", fontsize=14)
         plt.xlabel(x_labels[i], fontsize=14)
         plt.suptitle(titles[i], fontsize=18)
-        setup_string = get_setup(setup.strip())
+        setup_string = PlotGenerator.get_setup(setup.strip())
         plt.title(setup_string, fontsize=15)
 
         plt.ylim(0, 100)
