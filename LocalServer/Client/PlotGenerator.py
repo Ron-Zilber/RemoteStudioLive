@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colors
 from matplotlib.ticker import PercentFormatter
+from matplotlib.lines import Line2D
 import numpy as np
+import seaborn as sns
 
 
 def parse_input():
@@ -68,19 +70,17 @@ def get_setup(setup):
       return "Server - lab, client - same city"
     
 def MicroToMilli(nums):
-  return [num/1000 for num in nums]
+  return [num/1000.0 for num in nums]
 
 
 def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str, setup: str) -> None:
+  sns.set_theme(style="darkgrid")  
   normalized_values = MicroToMilli(packet_values)
   plt.figure(figsize=(10, 6))
 
   x, bins, p = plt.hist(normalized_values, bins=30, color='skyblue', edgecolor='black')
 
-  # Add x, y gridlines 
-  plt.grid(visible = True, color ='grey', 
-        linestyle ='-.', linewidth = 0.5, 
-        alpha = 0.6) 
+  plt.grid(visible=True, color='grey', linestyle='-.', linewidth=0.5, alpha=0.6)
 
   # Adding labels and title
   plt.xlabel(x_label, fontsize=14)
@@ -98,10 +98,14 @@ def plot_histogram(packet_values: list, title: str, x_label: str, file_name: str
     item.set_height(100 * item.get_height() / sum) 
   
   mean = np.mean(normalized_values)
-  plt.axvline(mean, color='red', linestyle='dashed', linewidth=1)
+  mean_line = plt.axvline(mean, color='red', linestyle='dashed', linewidth=1)
+  plt.text(mean, 90, f'{mean:.2f}', color='red', fontsize=9, ha='right')
 
   plt.ylim(0, 100)
   plt.xlim(0, 120)
+
+  custom_lines = [Line2D([0], [0], color='red', linestyle='dashed', linewidth=1)]
+  plt.legend(custom_lines, ['Mean'], loc='upper right')
 
   #plt.plot()
   plt.savefig(file_name+" "+frame_size, dpi=300)
@@ -152,10 +156,6 @@ if __name__=="__main__":
   packet_RTTs = [packets[i][2] for i in range(len(packets))]
  
   inter_arrivals = parse_stats_file(inter_arrival_file_name, "interArrival")
-
-  #plot_graph(packet_end_to_ends, "Packets Round Trip Time: "+str(get_audio_length(int(frame_size))) + " millisecond frames",
-  #           "Packet Index", "RTT [milliseconds]", "./Plots/Tests/test")
-   
   plot_histogram(
       packet_values=packet_end_to_ends,
       title='Packets End to End: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
@@ -163,7 +163,6 @@ if __name__=="__main__":
       file_name="./Plots/End To Ends/Packet End To Ends",
       setup=setup
       )
-  
   
   plot_histogram(
     packet_values=inter_arrivals,
