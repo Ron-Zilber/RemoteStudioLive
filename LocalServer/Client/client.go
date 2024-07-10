@@ -43,6 +43,7 @@ func main() {
 
 	// Close resources and synchronize goroutines
 	defer func() {
+		//time.Sleep(8 * time.Second)
 		close(endSessionChannel)
 		close(handleResponseChannel)
 		close(statsChannel)
@@ -164,6 +165,7 @@ func recordAndSend(conn net.Conn, logChannel, endSessionChannel chan string, dur
 				packet := Packet{PacketType: PacketCloseChannel}
 				packet.SendPacket(conn)
 				CheckError(stream.Stop())
+				time.Sleep(3 * time.Second)
 				return
 			}
 		}
