@@ -66,9 +66,10 @@ def parse_data(data_file):
 def parse_input():
     try:
         setup = sys.argv[1]
-        return setup
+        conn_type = sys.argv[2]
+        return setup, conn_type
     except IndexError:
-        print("Usage: python3 ./multipleFrameSizePlotter.py <setup>")
+        print("Usage: python3 ./multipleFrameSizePlotter.py <setup> <conn_type>")
         exit()
 
 def parse_stats_file(stats_file_name, type):
@@ -101,7 +102,7 @@ def bins_to_percentage(p):
    for item in p:
       item.set_height(100 * item.get_height() / sum)
 
-def create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summarized Table.png"):
+def create_table_plot(summarizedStatsFile, setup, conn_type, output_image="./Plots/Summarized Table.png"):
     setupString = PlotGenerator.get_setup(setup.strip())
     data = parse_data(summarizedStatsFile)
 
@@ -141,14 +142,14 @@ def create_table_plot(summarizedStatsFile, setup, output_image="./Plots/Summariz
         cell.set_text_props(ha='center', va='center', fontsize=10)
 
     plt.subplots_adjust(top=0.78)
-    plt.suptitle("End-to-End, RTT, Inter-Arrival, Jitter, Unordered Packets, and Lost Packets Metrics for Various Frame Sizes", fontsize=14)
-    plt.title("Setup: " + setupString)
+    plt.suptitle("End-to-End, RTT, Inter-Arrival, Jitter, Unordered Packets, and Lost Packets Metrics for Various Frame Sizes" + " ["+conn_type+"]", fontsize=18)
+    plt.title("Setup: " + setupString + " ["+conn_type+"]", fontsize=15)
 
     # Save the plot before showing it
     plt.savefig(output_image, dpi=300)
     plt.close()
 
-def create_box_plot(data, y_limit, title, x_label, y_label, box_colors, output_file="box_plot.png"):
+def create_box_plot(data, y_limit, suptitle, x_label, y_label, box_colors, setup, conn_type, output_file="box_plot.png"):
     sns.set_theme(style="darkgrid")  # Set the Seaborn style directly
 
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -171,7 +172,6 @@ def create_box_plot(data, y_limit, title, x_label, y_label, box_colors, output_f
 
     # Set custom labels
     ax.set_xticklabels(x_labels, rotation=0, fontsize=10)
-    ax.set_title(title, fontsize=18)
     ax.set_xlabel(x_label, fontsize=14)
     ax.set_ylabel(y_label, fontsize=14)
 
@@ -192,22 +192,28 @@ def create_box_plot(data, y_limit, title, x_label, y_label, box_colors, output_f
         Line2D([0], [0], color='blue', lw=2, linestyle='--', label='Mean')]
     ax.legend(handles=custom_lines, loc='upper right')
 
+    setup_string = PlotGenerator.get_setup(setup.strip())
+    subtitle = setup_string + " [" + conn_type + "]"
+
+    # Set titles
+    plt.suptitle(suptitle, fontsize=18)
+    ax.set_title(subtitle, fontsize=15)
+
     # Save the plot as an image file
     plt.savefig(output_file, bbox_inches='tight', dpi=300)
     plt.close()
     return
-
-def create_summarized_box_plots(data, y_limits, y_labels_list, titles_list,output_files_list):
+def create_summarized_box_plots(data, y_limits, y_labels_list, titles_list,setup, conn_type, output_files_list):
     colors = ['skyblue', 'orange', 'green', 'red', 'purple']
 
     for i in range(len(data)):
-      create_box_plot(data[i],title= titles_list[i],box_colors=colors,
+      create_box_plot(data[i],suptitle= titles_list[i],setup=setup,conn_type=conn_type,box_colors=colors,
          x_label= "Frame Size [millisecond]",y_label= y_labels_list[i],
          output_file= output_files_list[i], y_limit= y_limits[i])
     
     return
 
-def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r_widths, x_limits, titles, setup, output_file_names=None):
+def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r_widths, x_limits, titles, setup, conn_type, output_file_names=None):
     sns.set_theme(style="darkgrid")
 
     summarized_RTTs = []
@@ -251,7 +257,7 @@ def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r
         plt.ylabel("Percentage [%]", fontsize=14)
         plt.xlabel(x_labels[i], fontsize=14)
         plt.suptitle(titles[i], fontsize=18)
-        setup_string = PlotGenerator.get_setup(setup.strip())
+        setup_string = PlotGenerator.get_setup(setup.strip()) + " ["+conn_type+"]"
         plt.title(setup_string, fontsize=15)
 
         plt.ylim(0, 100)
@@ -261,28 +267,28 @@ def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r
 
 if __name__ == "__main__":
 
-    setup = parse_input()
+    setup, conn_type = parse_input()
     summarized_stats_file = "./Stats/SummarizedStats.txt"
     
     # Ensure the output directory exists
     os.makedirs(os.path.dirname("./Plots/Summarized Table.png"), exist_ok=True)
     
-    create_table_plot(summarized_stats_file, setup, output_image="./Plots/Summarized Table.png")
+    create_table_plot(summarized_stats_file, setup, conn_type, output_image="./Plots/Summarized Table.png")
 
     data = load_data()
 
-    titles = ["End To End Latency [millisecond]","Round Trip Time [millisecond]",
-       "Packet Inter-Arrivals [millisecond]"]
+    titles = ["End To End Latency","Round Trip Time",
+       "Inter-Arrivals"]
     
     y_labels = ["End To End Latency [millisecond]","Round Trip Time [millisecond]",
-       "Packet Inter-Arrivals [millisecond]"]
+       "Inter-Arrivals [millisecond]"]
     
     output_files = ["./Plots/Summarized End to End - Box Plot.png","./Plots/Summarized Inter Arrival - Box Plot.png",
        "./Plots/Summarized RTT - Box Plot.png"]
 
     y_limits=[60, 10, 60]
 
-    create_summarized_box_plots(data, y_limits, y_labels, titles, output_files)
+    create_summarized_box_plots(data, y_limits, y_labels, titles, setup, conn_type, output_files)
 
     metrics_files = ["./Stats/StatisticsLog 120.txt", "./Stats/StatisticsLog 240.txt",
        "./Stats/StatisticsLog 480.txt","./Stats/StatisticsLog 960.txt",
@@ -305,5 +311,5 @@ if __name__ == "__main__":
     create_summarized_histograms(inter_arrival_files=inter_arrival_files,
                                metrics_files=metrics_files,
                                x_labels=x_labels, x_limits=x_limits,
-                               r_widths=r_widths, titles=titles,
+                               r_widths=r_widths, titles=titles,conn_type=conn_type,
                                setup=setup, output_file_names=output_files)

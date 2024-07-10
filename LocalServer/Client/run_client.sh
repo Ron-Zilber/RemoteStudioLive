@@ -17,6 +17,6 @@ elif [ $op_mode == "song" ]; then
     go run ClientUtils.go client.go $connType "$ip_address" 7777 $op_mode 2>/dev/null | mpg123 -
 fi  
 
-python3 ./PlotGenerator.py ./Stats/StatisticsLog.txt ./Stats/interArrivalLog.txt $frame_size $setup
+python3 ./PlotGenerator.py ./Stats/StatisticsLog.txt ./Stats/interArrivalLog.txt $frame_size $setup $connType
 
 #python3 ./multipleFrameSizePlotter.py $setup

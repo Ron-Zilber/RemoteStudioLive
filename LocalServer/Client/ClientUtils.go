@@ -77,15 +77,23 @@ func jitter(values []int64) float64 {
 	return math.Sqrt(quadDev)
 }
 
-func countUnordered(indexesList []int64) int { // TODO: should be counted in pairs or singles?
+func countUnordered(indexesList []int64) int {
 	var count int
-	for i, index := range indexesList {
-		if int64(i) != index {
+	if len(indexesList) == 0 {
+		return 0
+	}
+
+	prevIndex := indexesList[0]
+	
+	for i := 1; i < len(indexesList); i++ {
+		if indexesList[i] != prevIndex+1 {
 			count++
 		}
+		prevIndex = indexesList[i]
 	}
 	return count
 }
+
 
 func countLostPackets(indexesList []int64) int {
 	maxItem := slices.Max(indexesList)
