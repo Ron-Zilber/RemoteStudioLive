@@ -169,4 +169,12 @@ if __name__=="__main__":
     file_name="./Plots/Inter Arrivals/Inter-Arrivals",
     setup=setup, conn_type=conn_type
     )
+  
+  plot_histogram(
+    packet_values=packet_RTTs,
+    title='Round Trip Time: '+str(get_audio_length(int(frame_size))) + " millisecond frames",
+    x_label='Round Trip Time [milliseconds]',
+    file_name="./Plots/RTTs/Round Trip Time",
+    setup=setup, conn_type=conn_type
+    )
 
