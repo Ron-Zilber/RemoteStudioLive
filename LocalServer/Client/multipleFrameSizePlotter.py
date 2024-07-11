@@ -139,11 +139,11 @@ def create_table_plot(summarizedStatsFile, setup, conn_type, output_image="./Plo
     for key, cell in cell_dict.items():
         cell.set_edgecolor('grey')
         cell.set_linewidth(0.5)
-        cell.set_text_props(ha='center', va='center', fontsize=10)
+        cell.set_text_props(ha='center', va='center', fontsize=14)
 
-    plt.subplots_adjust(top=0.78)
-    plt.suptitle("End-to-End, RTT, Inter-Arrival, Jitter, Unordered Packets, and Lost Packets Metrics for Various Frame Sizes" + " ["+conn_type+"]", fontsize=18)
-    plt.title("Setup: " + setupString + " ["+conn_type+"]", fontsize=15)
+    plt.subplots_adjust(top=0.65)
+    plt.suptitle("End-to-End, RTT, Inter-Arrival, Jitter, Unordered Packets,\nand Lost Packets Metrics for Various Frame Sizes", fontsize=17.5)
+    plt.title("Setup: " + setupString + " ["+conn_type+"]", fontsize=14.5)
 
     # Save the plot before showing it
     plt.savefig(output_image, dpi=300)
@@ -213,7 +213,7 @@ def create_summarized_box_plots(data, y_limits, y_labels_list, titles_list,setup
     
     return
 
-def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r_widths, x_limits, titles, setup, conn_type, output_file_names=None):
+def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r_widths, num_bins, x_limits, titles, setup, conn_type, output_file_names=None):
     sns.set_theme(style="darkgrid")
 
     summarized_RTTs = []
@@ -237,12 +237,12 @@ def create_summarized_histograms(metrics_files, inter_arrival_files, x_labels, r
     for i in range(len(summarized_metrics)):
         plt.figure(figsize=(10,6))
         for j in range(len(summarized_end_to_ends)):
-            x, b, p = plt.hist(summarized_metrics[i][j],bins=30, histtype='bar', rwidth=r_widths[i], color=colors[j], edgecolor='black', alpha=0.5)
+            x, b, p = plt.hist(summarized_metrics[i][j],bins=num_bins[i], histtype='bar', rwidth=r_widths[i], color=colors[j], edgecolor='black', alpha=0.5)
             bins_to_percentage(p)
             mean = np.mean(summarized_metrics[i][j])
             mean_line = plt.axvline(mean, color=colors[j], linestyle='dashed', linewidth=1)
             max_height = max(item.get_height() for item in p)
-            plt.text(mean, max_height + 2, f'{mean:.2f}', color=colors[j], fontsize=10, ha='right')
+            plt.text(mean, min(max_height + 2, 95), f'{mean:.2f}', color=colors[j], fontsize=10, ha='right')
         
         plt.plot()
 
@@ -303,13 +303,14 @@ if __name__ == "__main__":
     titles = ["End to End Latency", "Round Trip Times", "Inter Arrivals"]
 
     x_limits = [60, 10, 60]
-    r_widths = [1.5, 0.25, 5]
+    r_widths = [0.6, 0.1, 0.6]
+    num_bins = [120, 30, 120]
 
     output_files = ["./Plots/Summarized End to End - Histogram.png", "./Plots/Summarized RTT - Histogram.png",
                     "./Plots/Summarized Inter Arrival - Histogram.png"]
 
     create_summarized_histograms(inter_arrival_files=inter_arrival_files,
                                metrics_files=metrics_files,
-                               x_labels=x_labels, x_limits=x_limits,
+                               x_labels=x_labels, x_limits=x_limits, num_bins=num_bins,
                                r_widths=r_widths, titles=titles,conn_type=conn_type,
                                setup=setup, output_file_names=output_files)
